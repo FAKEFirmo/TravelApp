@@ -1,0 +1,22 @@
+# Node
+node_modules/
+
+# Vite
+/dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Local env
+.env
+.env.*
