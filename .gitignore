@@ -20,3 +20,6 @@ pnpm-debug.log*
 # Local env
 .env
 .env.*
+
+# npm lockfile (CI uses fresh install)
+package-lock.json
