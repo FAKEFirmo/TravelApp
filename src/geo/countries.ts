@@ -19,8 +19,10 @@ export function getAllCountries(): CountryFeature[] {
   const topology: any = countries110m as any;
   const countriesObj = topology.objects.countries;
 
-  const fc = feature(topology, countriesObj) as FeatureCollection<Polygon | MultiPolygon, any>;
-
+  const fc = feature(topology, countriesObj) as unknown as FeatureCollection<
+  Polygon | MultiPolygon,
+  any
+>;
   // Normalize the properties a bit.
   const list = (fc.features as any[]).map((f) =>
     ({
