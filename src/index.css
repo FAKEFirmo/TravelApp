@@ -1,5 +1,16 @@
 :root {
   color-scheme: dark;
+  --bg: #0b1020;
+
+  --glass-bg: rgba(255, 255, 255, 0.12);
+  --glass-bg-2: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.72);
+
+  --accent: rgba(0, 200, 255, 1);
 }
 
 html,
@@ -10,8 +21,10 @@ body,
   margin: 0;
   padding: 0;
   overflow: hidden;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
-    "Segoe UI Emoji";
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  background: var(--bg);
+  color: var(--text);
 }
 
 button,
@@ -20,7 +33,7 @@ input {
   font: inherit;
 }
 
-/* Simple, readable defaults */
+/* Base controls (not used by the bottom bar). */
 button {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.08);
@@ -53,3 +66,218 @@ hr {
   border: none;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
+
+/* Liquid-glass primitives */
+.glassSurface {
+  background: linear-gradient(135deg, var(--glass-bg), var(--glass-bg-2));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+}
+
+/* Hybrid map/globe */
+.hybridRoot {
+  position: absolute;
+  inset: 0;
+}
+
+.hybridLayer {
+  position: absolute;
+  inset: 0;
+  transition: opacity 240ms ease;
+}
+
+.maplibreRoot {
+  position: absolute;
+  inset: 0;
+}
+
+.offlineBadge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 30;
+  padding: 8px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+/* Bottom bar (liquid glass) */
+.bottomBarWrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.bottomBar {
+  pointer-events: auto;
+  width: min(360px, calc(100vw - 32px));
+  height: 64px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  gap: 12px;
+}
+
+.bottomBarItem {
+  width: 56px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: rgba(170, 220, 255, 0.9);
+  padding: 0;
+}
+
+.bottomBarItem:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bottomBarItem.isActive {
+  background: rgba(0, 200, 255, 0.28);
+  color: rgba(240, 255, 255, 0.95);
+}
+
+.bottomBarAdd {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(0, 200, 255, 0.95);
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottomBarAdd:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Screens */
+.screenRoot {
+  position: absolute;
+  inset: 0;
+}
+
+/* Keep the bottom bar from covering scrollable content */
+.screenScroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 16px;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+}
+
+.card {
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.cardTitle {
+  font-weight: 750;
+}
+
+.smallMuted {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rowSpace {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Modal / sheet */
+.sheetBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
+.sheet {
+  width: min(520px, 100%);
+  border-radius: 22px;
+  padding: 14px;
+}
+
+.sheetButton {
+  width: 100%;
+  justify-content: space-between;
+  display: flex;
+  align-items: center;
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.sheetButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Add-visit hint */
+.mapHint {
+  position: absolute;
+  z-index: 50;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(92px + env(safe-area-inset-bottom));
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* Reduce visual clutter on the MapLibre map */
+.maplibregl-ctrl-top-right {
+  margin-top: 12px;
+  margin-right: 12px;
+}
+
+.maplibregl-ctrl-group {
+  background: rgba(0, 0, 0, 0.45) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  backdrop-filter: blur(10px);
+}
+
+.maplibregl-ctrl-group button {
+  border: none !important;
+}
+

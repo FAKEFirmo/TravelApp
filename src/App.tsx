@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GlobeView, type GlobeFocus, type ViewMode } from './components/GlobeView';
+import { BottomBar, type BottomTab } from './components/BottomBar';
+import { GlassSurface } from './components/GlassSurface';
+import type { GlobeFocus, ViewMode } from './components/GlobeView';
 import { getAllCountries, getCountryName, type CountryFeature } from './geo/countries';
 import type { ExportBundle, Trip, Visit } from './storage/schema';
 import * as DB from './storage/db';
 import { uid } from './utils/uid';
+import { JournalScreen } from './screens/JournalScreen';
+import { MapScreen } from './screens/MapScreen';
 
 const ALL_TRIPS_ID = '__all__';
 
@@ -19,17 +23,10 @@ function downloadJson(filename: string, obj: unknown) {
   URL.revokeObjectURL(url);
 }
 
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(reader.error ?? new Error('Failed reading file'));
-    reader.readAsText(file);
-  });
-}
-
 export default function App() {
   const allCountries = useMemo(() => getAllCountries(), []);
+
+  const [tab, setTab] = useState<BottomTab>('map');
 
   const [mode, setMode] = useState<ViewMode>('countries');
 
@@ -42,15 +39,15 @@ export default function App() {
   const [focus, setFocus] = useState<GlobeFocus | null>(null);
 
   // Add visit flow
-  const [isAdding, setIsAdding] = useState(false);
+  const [isAddingVisit, setIsAddingVisit] = useState(false);
   const [pickedCoords, setPickedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [cityName, setCityName] = useState('');
   const [countryId, setCountryId] = useState('');
   const [visitedAt, setVisitedAt] = useState('');
   const [countrySearch, setCountrySearch] = useState('');
 
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputReplaceRef = useRef<HTMLInputElement | null>(null);
+  // Add action sheet
+  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
 
   const filteredCountries = useMemo(() => {
     const q = countrySearch.trim().toLowerCase();
@@ -128,24 +125,27 @@ export default function App() {
 
   function startAddVisit() {
     if (activeTripId === ALL_TRIPS_ID) {
-      alert('Select a specific trip to add a visit.');
+      alert('Select a specific trip first (Journal tab → Trip selector).');
+      setTab('journal');
       return;
     }
-    setIsAdding(true);
+
+    setIsAddingVisit(true);
     setPickedCoords(null);
     setCityName('');
     setCountryId('');
     setVisitedAt('');
     setCountrySearch('');
+    setTab('map');
   }
 
-  function cancelAddVisit() {
-    setIsAdding(false);
+  function stopAddVisit() {
+    setIsAddingVisit(false);
     setPickedCoords(null);
   }
 
   async function saveVisit() {
-    if (!isAdding || !pickedCoords) return;
+    if (!isAddingVisit || !pickedCoords) return;
     if (!activeTripId || activeTripId === ALL_TRIPS_ID) return;
 
     const city = cityName.trim();
@@ -173,9 +173,9 @@ export default function App() {
     await refreshVisits(activeTripId);
 
     // Fly to the newly added visit.
-    setFocus({ lat: v.lat, lng: v.lng, altitude: 1.3 });
+    setFocus({ lat: v.lat, lng: v.lng, altitude: 1.35 });
 
-    // keep adding mode, but clear coords + form
+    // Keep add mode enabled, but reset the form so user can tap again.
     setPickedCoords(null);
     setCityName('');
     setCountryId('');
@@ -196,276 +196,286 @@ export default function App() {
     downloadJson(`travelapp-export-${new Date().toISOString().slice(0, 10)}.json`, bundle);
   }
 
-  async function doImport(file: File, replace: boolean) {
-    const txt = await readFileAsText(file);
-    const parsed = JSON.parse(txt) as ExportBundle;
-    await DB.importAll(parsed, { replace });
+  async function doImport(bundle: ExportBundle, replace: boolean) {
+    await DB.importAll(bundle, { replace });
     await refreshTrips();
     await refreshVisits(activeTripId);
   }
 
-  const visitedCountriesCount = visitedCountries.length;
-  const visitedCitiesCount = visits.length;
+  function onFlyToVisit(v: Visit) {
+    setFocus({ lat: v.lat, lng: v.lng, altitude: 1.35 });
+    setTab('map');
+  }
 
   return (
-    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-      {/* Side panel (replace with React Bits later) */}
-      <div
-        style={{
-          position: 'absolute',
-          zIndex: 10,
-          top: 12,
-          left: 12,
-          width: 340,
-          maxWidth: '92vw',
-          padding: 12,
-          borderRadius: 14,
-          background: 'rgba(0,0,0,0.58)',
-          color: 'white',
-          backdropFilter: 'blur(8px)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.35)'
+    <div className="screenRoot">
+      {tab === 'map' ? (
+        <MapScreen
+          visits={visits}
+          visitedCountries={visitedCountries}
+          mode={mode}
+          focus={focus}
+          isPicking={isAddingVisit}
+          pickedCoords={pickedCoords}
+          onPickCoords={(coords) => {
+            if (!isAddingVisit) return;
+            setPickedCoords(coords);
+          }}
+        />
+      ) : (
+        <JournalScreen
+          mode={mode}
+          onChangeMode={setMode}
+          trips={trips}
+          activeTripId={activeTripId}
+          onChangeTrip={setActiveTripId}
+          visits={visits}
+          visitedCountries={visitedCountries}
+          onCreateTrip={createTrip}
+          onRemoveTrip={removeTrip}
+          onRemoveVisit={removeVisit}
+          onFlyToVisit={onFlyToVisit}
+          onExport={doExport}
+          onImport={doImport}
+        />
+      )}
+
+      <BottomBar
+        activeTab={tab}
+        onChangeTab={(next) => {
+          setTab(next);
+          setIsAddSheetOpen(false);
         }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700 }}>TravelApp</div>
-            <div style={{ fontSize: 12, opacity: 0.85 }}>
-              Countries: {visitedCountriesCount} • Cities: {visitedCitiesCount}
+        onPressAdd={() => setIsAddSheetOpen(true)}
+      />
+
+      {isAddSheetOpen ? (
+        <AddActionSheet
+          isAddingVisit={isAddingVisit}
+          canAddVisit={activeTripId !== ALL_TRIPS_ID}
+          onClose={() => setIsAddSheetOpen(false)}
+          onAddTrip={() => {
+            setIsAddSheetOpen(false);
+            createTrip();
+          }}
+          onAddVisit={() => {
+            setIsAddSheetOpen(false);
+            startAddVisit();
+          }}
+          onStopAddVisit={() => {
+            setIsAddSheetOpen(false);
+            stopAddVisit();
+          }}
+        />
+      ) : null}
+
+      {isAddingVisit && pickedCoords ? (
+        <VisitFormSheet
+          coords={pickedCoords}
+          cityName={cityName}
+          onChangeCity={setCityName}
+          countrySearch={countrySearch}
+          onChangeCountrySearch={setCountrySearch}
+          countryId={countryId}
+          onChangeCountryId={setCountryId}
+          visitedAt={visitedAt}
+          onChangeVisitedAt={setVisitedAt}
+          countries={filteredCountries}
+          onCancel={() => {
+            // Keep add mode on, but hide the form.
+            setPickedCoords(null);
+          }}
+          onStop={() => {
+            stopAddVisit();
+          }}
+          onSave={saveVisit}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function AddActionSheet(props: {
+  isAddingVisit: boolean;
+  canAddVisit: boolean;
+  onClose: () => void;
+  onAddTrip: () => void;
+  onAddVisit: () => void;
+  onStopAddVisit: () => void;
+}) {
+  const { isAddingVisit, canAddVisit, onClose, onAddTrip, onAddVisit, onStopAddVisit } = props;
+
+  return (
+    <div
+      className="sheetBackdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Actions"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <GlassSurface className="sheet">
+        <div className="rowSpace" style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 800 }}>Actions</div>
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        <button className="sheetButton" onClick={onAddTrip}>
+          <span>Add new trip</span>
+          <span style={{ opacity: 0.7 }}>＋</span>
+        </button>
+
+        <div style={{ height: 10 }} />
+
+        {isAddingVisit ? (
+          <button className="sheetButton" onClick={onStopAddVisit}>
+            <span>Finish adding visits</span>
+            <span style={{ opacity: 0.7 }}>✓</span>
+          </button>
+        ) : (
+          <button
+            className="sheetButton"
+            onClick={onAddVisit}
+            disabled={!canAddVisit}
+            title={!canAddVisit ? 'Select a specific trip first (Journal tab).' : undefined}
+          >
+            <span>Add visit (tap on map)</span>
+            <span style={{ opacity: 0.7 }}>📍</span>
+          </button>
+        )}
+
+        {!canAddVisit && !isAddingVisit ? (
+          <div className="smallMuted" style={{ marginTop: 10 }}>
+            Tip: pick a trip in the Journal tab first.
+          </div>
+        ) : null}
+      </GlassSurface>
+    </div>
+  );
+}
+
+function VisitFormSheet(props: {
+  coords: { lat: number; lng: number };
+  cityName: string;
+  onChangeCity: (v: string) => void;
+
+  visitedAt: string;
+  onChangeVisitedAt: (v: string) => void;
+
+  countrySearch: string;
+  onChangeCountrySearch: (v: string) => void;
+
+  countryId: string;
+  onChangeCountryId: (v: string) => void;
+
+  countries: CountryFeature[];
+
+  onCancel: () => void;
+  onStop: () => void;
+  onSave: () => void;
+}) {
+  const {
+    coords,
+    cityName,
+    onChangeCity,
+    visitedAt,
+    onChangeVisitedAt,
+    countrySearch,
+    onChangeCountrySearch,
+    countryId,
+    onChangeCountryId,
+    countries,
+    onCancel,
+    onStop,
+    onSave
+  } = props;
+
+  return (
+    <div
+      className="sheetBackdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Add visit"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel();
+      }}
+    >
+      <GlassSurface className="sheet">
+        <div className="rowSpace" style={{ marginBottom: 10 }}>
+          <div>
+            <div style={{ fontWeight: 850 }}>New visit</div>
+            <div className="smallMuted">
+              Picked: lat {coords.lat.toFixed(4)} • lng {coords.lng.toFixed(4)}
             </div>
           </div>
-          <button onClick={doExport} title="Export trips + visits to JSON">
-            Export
-          </button>
+          <div className="row">
+            <button onClick={onStop} title="Stop adding visits">
+              Done
+            </button>
+            <button onClick={onCancel}>Close</button>
+          </div>
         </div>
-
-        <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            title="Import (merge) trips + visits from JSON"
-          >
-            Import (merge)
-          </button>
-          <button
-            onClick={() => fileInputReplaceRef.current?.click()}
-            title="Import (replace) trips + visits from JSON"
-          >
-            Import (replace)
-          </button>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json"
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.currentTarget.value = '';
-              if (!f) return;
-              try {
-                await doImport(f, false);
-              } catch (err) {
-                alert(`Import failed: ${String(err)}`);
-              }
-            }}
-          />
-          <input
-            ref={fileInputReplaceRef}
-            type="file"
-            accept="application/json"
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const f = e.target.files?.[0];
-              e.currentTarget.value = '';
-              if (!f) return;
-              const ok = confirm('Replace ALL local data with the imported file?');
-              if (!ok) return;
-              try {
-                await doImport(f, true);
-              } catch (err) {
-                alert(`Import failed: ${String(err)}`);
-              }
-            }}
-          />
-        </div>
-
-        <hr style={{ margin: '12px 0' }} />
 
         <div>
-          <label style={{ fontSize: 12, opacity: 0.85 }}>Trip</label>
-          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-            <select
-              value={activeTripId}
-              onChange={(e) => setActiveTripId(e.target.value)}
-              title="Select a trip"
-            >
-              <option value={ALL_TRIPS_ID}>All trips</option>
-              {trips.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.title}
-                </option>
-              ))}
-            </select>
-            <button onClick={createTrip} title="Create a new trip">
-              +
-            </button>
-            <button
-              disabled={activeTripId === ALL_TRIPS_ID}
-              onClick={() => activeTripId !== ALL_TRIPS_ID && removeTrip(activeTripId)}
-              title="Delete selected trip"
-            >
-              🗑
-            </button>
-          </div>
+          <label className="smallMuted">City name</label>
+          <input
+            value={cityName}
+            onChange={(e) => onChangeCity(e.target.value)}
+            placeholder="e.g., Rome"
+          />
         </div>
 
         <div style={{ marginTop: 10 }}>
-          <label style={{ fontSize: 12, opacity: 0.85 }}>View</label>
-          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-            <button onClick={() => setMode('countries')} disabled={mode === 'countries'}>
-              Countries
-            </button>
-            <button onClick={() => setMode('cities')} disabled={mode === 'cities'}>
-              Cities
-            </button>
-            <button onClick={() => setMode('both')} disabled={mode === 'both'}>
-              Both
-            </button>
-          </div>
+          <label className="smallMuted">Visited date (optional)</label>
+          <input type="date" value={visitedAt} onChange={(e) => onChangeVisitedAt(e.target.value)} />
         </div>
 
-        <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-          <button onClick={startAddVisit} disabled={activeTripId === ALL_TRIPS_ID}>
-            Add visit
+        <div style={{ marginTop: 10 }}>
+          <label className="smallMuted">Country</label>
+          <input
+            value={countrySearch}
+            onChange={(e) => onChangeCountrySearch(e.target.value)}
+            placeholder="Search countries…"
+            style={{ marginTop: 6, marginBottom: 8 }}
+          />
+          <select value={countryId} onChange={(e) => onChangeCountryId(e.target.value)}>
+            <option value="" disabled>
+              Select…
+            </option>
+            {countries.map((c) => (
+              <option key={String(c.id)} value={String(c.id)}>
+                {c.properties?.name}
+              </option>
+            ))}
+          </select>
+
+          {countryId ? (
+            <div className="smallMuted" style={{ marginTop: 8 }}>
+              Country selected: {getCountryName(countryId)}
+            </div>
+          ) : null}
+        </div>
+
+        <div style={{ marginTop: 12 }} className="row">
+          <button onClick={onSave} style={{ flex: 1 }}>
+            Save
           </button>
-          <button onClick={cancelAddVisit} disabled={!isAdding}>
-            Done
+          <button
+            onClick={() => {
+              onChangeCity('');
+              onChangeCountryId('');
+              onChangeVisitedAt('');
+            }}
+          >
+            Reset
           </button>
         </div>
 
-        {isAdding ? (
-          <div style={{ marginTop: 10 }}>
-            {!pickedCoords ? (
-              <div style={{ fontSize: 13, opacity: 0.9 }}>
-                Tap the globe to pick coordinates.
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: 12, opacity: 0.85 }}>
-                  Picked: lat {pickedCoords.lat.toFixed(4)} • lng {pickedCoords.lng.toFixed(4)}
-                </div>
-
-                <div style={{ marginTop: 8 }}>
-                  <label style={{ fontSize: 12, opacity: 0.85 }}>City name</label>
-                  <input value={cityName} onChange={(e) => setCityName(e.target.value)} placeholder="e.g., Rome" />
-                </div>
-
-                <div style={{ marginTop: 8 }}>
-                  <label style={{ fontSize: 12, opacity: 0.85 }}>Visited date (optional)</label>
-                  <input type="date" value={visitedAt} onChange={(e) => setVisitedAt(e.target.value)} />
-                </div>
-
-                <div style={{ marginTop: 8 }}>
-                  <label style={{ fontSize: 12, opacity: 0.85 }}>Country</label>
-                  <input
-                    value={countrySearch}
-                    onChange={(e) => setCountrySearch(e.target.value)}
-                    placeholder="Search countries…"
-                    style={{ marginBottom: 8 }}
-                  />
-                  <select value={countryId} onChange={(e) => setCountryId(e.target.value)}>
-                    <option value="" disabled>
-                      Select…
-                    </option>
-                    {filteredCountries.map((c) => (
-                      <option key={String(c.id)} value={String(c.id)}>
-                        {c.properties?.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-                  <button onClick={saveVisit}>Save</button>
-                  <button
-                    onClick={() => {
-                      setPickedCoords(null);
-                      setCityName('');
-                      setCountryId('');
-                      setVisitedAt('');
-                    }}
-                  >
-                    Reset
-                  </button>
-                </div>
-
-                {countryId ? (
-                  <div style={{ marginTop: 8, fontSize: 12, opacity: 0.85 }}>
-                    Country selected: {getCountryName(countryId)}
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ marginTop: 10, fontSize: 13, opacity: 0.9 }}>
-            Tip: select a trip, hit <b>Add visit</b>, then tap the globe.
-          </div>
-        )}
-
-        <hr style={{ margin: '12px 0' }} />
-
-        <div style={{ maxHeight: 260, overflow: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ fontWeight: 700, flex: 1 }}>Visits</div>
-            <div style={{ fontSize: 12, opacity: 0.75 }}>{visits.length}</div>
-          </div>
-
-          {visits.length === 0 ? (
-            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85 }}>No visits yet.</div>
-          ) : (
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, marginTop: 8 }}>
-              {visits.map((v) => (
-                <li
-                  key={v.id}
-                  style={{
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    padding: '8px 8px',
-                    borderRadius: 10,
-                    border: '1px solid rgba(255,255,255,0.10)',
-                    marginBottom: 8
-                  }}
-                >
-                  <button
-                    style={{ flex: 1, textAlign: 'left' }}
-                    title="Fly to this visit"
-                    onClick={() => setFocus({ lat: v.lat, lng: v.lng, altitude: 1.35 })}
-                  >
-                    <div style={{ fontWeight: 650 }}>{v.cityName}</div>
-                    <div style={{ fontSize: 12, opacity: 0.8 }}>
-                      {getCountryName(v.countryId)}
-                      {v.visitedAt ? ` • ${v.visitedAt}` : ''}
-                    </div>
-                  </button>
-                  <button title="Delete visit" onClick={() => removeVisit(v.id)}>
-                    🗑
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+        <div className="smallMuted" style={{ marginTop: 10 }}>
+          After saving, tap another point to add more.
         </div>
-      </div>
-
-      {/* Globe */}
-      <GlobeView
-        visits={visits}
-        visitedCountries={visitedCountries}
-        mode={mode}
-        focus={focus}
-        onPickCoords={isAdding && !pickedCoords ? (coords) => setPickedCoords(coords) : undefined}
-      />
+      </GlassSurface>
     </div>
   );
 }
