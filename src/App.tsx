@@ -43,7 +43,8 @@ export default function App() {
   const [pickedCoords, setPickedCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [cityName, setCityName] = useState('');
   const [countryId, setCountryId] = useState('');
-  const [visitedAt, setVisitedAt] = useState('');
+  const [arrivalAt, setArrivalAt] = useState('');
+  const [departureAt, setDepartureAt] = useState('');
   const [countrySearch, setCountrySearch] = useState('');
 
   // Add action sheet
@@ -54,6 +55,17 @@ export default function App() {
     if (!q) return allCountries;
     return allCountries.filter((c) => (c.properties?.name ?? '').toLowerCase().includes(q));
   }, [allCountries, countrySearch]);
+
+  const cityOptionsForCountry = useMemo(() => {
+    if (!countryId) return [] as string[];
+    const set = new Set(
+      visits
+        .filter((v) => String(v.countryId) === String(countryId))
+        .map((v) => v.cityName)
+        .filter(Boolean)
+    );
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [visits, countryId]);
 
   async function refreshTrips() {
     const list = await DB.listTrips();
@@ -83,6 +95,8 @@ export default function App() {
   }
 
   useEffect(() => {
+    // best-effort migration for older local DBs
+    DB.migrateV2IfNeeded();
     refreshTrips();
   }, []);
 
@@ -134,7 +148,8 @@ export default function App() {
     setPickedCoords(null);
     setCityName('');
     setCountryId('');
-    setVisitedAt('');
+    setArrivalAt('');
+    setDepartureAt('');
     setCountrySearch('');
     setTab('map');
   }
@@ -165,7 +180,8 @@ export default function App() {
       countryId,
       lat: pickedCoords.lat,
       lng: pickedCoords.lng,
-      visitedAt: visitedAt || undefined,
+      arrivalAt: arrivalAt || undefined,
+      departureAt: departureAt || undefined,
       createdAt: new Date().toISOString()
     };
 
@@ -179,7 +195,8 @@ export default function App() {
     setPickedCoords(null);
     setCityName('');
     setCountryId('');
-    setVisitedAt('');
+    setArrivalAt('');
+    setDepartureAt('');
   }
 
   async function removeVisit(visitId: string) {
@@ -278,8 +295,11 @@ export default function App() {
           onChangeCountrySearch={setCountrySearch}
           countryId={countryId}
           onChangeCountryId={setCountryId}
-          visitedAt={visitedAt}
-          onChangeVisitedAt={setVisitedAt}
+          arrivalAt={arrivalAt}
+          onChangeArrivalAt={setArrivalAt}
+          departureAt={departureAt}
+          onChangeDepartureAt={setDepartureAt}
+          cityOptions={cityOptionsForCountry}
           countries={filteredCountries}
           onCancel={() => {
             // Keep add mode on, but hide the form.
@@ -360,14 +380,19 @@ function VisitFormSheet(props: {
   cityName: string;
   onChangeCity: (v: string) => void;
 
-  visitedAt: string;
-  onChangeVisitedAt: (v: string) => void;
+  arrivalAt: string;
+  onChangeArrivalAt: (v: string) => void;
+
+  departureAt: string;
+  onChangeDepartureAt: (v: string) => void;
 
   countrySearch: string;
   onChangeCountrySearch: (v: string) => void;
 
   countryId: string;
   onChangeCountryId: (v: string) => void;
+
+  cityOptions: string[];
 
   countries: CountryFeature[];
 
@@ -379,17 +404,37 @@ function VisitFormSheet(props: {
     coords,
     cityName,
     onChangeCity,
-    visitedAt,
-    onChangeVisitedAt,
+    arrivalAt,
+    onChangeArrivalAt,
+    departureAt,
+    onChangeDepartureAt,
     countrySearch,
     onChangeCountrySearch,
     countryId,
     onChangeCountryId,
+    cityOptions,
     countries,
     onCancel,
     onStop,
     onSave
   } = props;
+
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
+
+  const canNext =
+    (step === 0 && !!countryId) ||
+    (step === 1 && !!cityName.trim()) ||
+    (step === 2 && !!arrivalAt) ||
+    (step === 3 && true);
+
+  function next() {
+    if (!canNext) return;
+    setStep((s) => (s === 3 ? 3 : ((s + 1) as any)));
+  }
+
+  function back() {
+    setStep((s) => (s === 0 ? 0 : ((s - 1) as any)));
+  }
 
   return (
     <div
@@ -417,63 +462,116 @@ function VisitFormSheet(props: {
           </div>
         </div>
 
-        <div>
-          <label className="smallMuted">City name</label>
-          <input
-            value={cityName}
-            onChange={(e) => onChangeCity(e.target.value)}
-            placeholder="e.g., Rome"
-          />
+        {/* Step indicator */}
+        <div className="row" style={{ justifyContent: 'center', gap: 8, marginBottom: 10 }}>
+          {[0, 1, 2, 3].map((i) => (
+            <span
+              key={i}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: i === step ? 'rgba(0,200,255,0.9)' : 'rgba(255,255,255,0.18)'
+              }}
+            />
+          ))}
         </div>
 
-        <div style={{ marginTop: 10 }}>
-          <label className="smallMuted">Visited date (optional)</label>
-          <input type="date" value={visitedAt} onChange={(e) => onChangeVisitedAt(e.target.value)} />
-        </div>
-
-        <div style={{ marginTop: 10 }}>
-          <label className="smallMuted">Country</label>
-          <input
-            value={countrySearch}
-            onChange={(e) => onChangeCountrySearch(e.target.value)}
-            placeholder="Search countries…"
-            style={{ marginTop: 6, marginBottom: 8 }}
-          />
-          <select value={countryId} onChange={(e) => onChangeCountryId(e.target.value)}>
-            <option value="" disabled>
-              Select…
-            </option>
-            {countries.map((c) => (
-              <option key={String(c.id)} value={String(c.id)}>
-                {c.properties?.name}
+        {step === 0 ? (
+          <div>
+            <label className="smallMuted">Country</label>
+            <input
+              value={countrySearch}
+              onChange={(e) => onChangeCountrySearch(e.target.value)}
+              placeholder="Type to filter countries…"
+              style={{ marginTop: 6, marginBottom: 8 }}
+            />
+            <select value={countryId} onChange={(e) => onChangeCountryId(e.target.value)}>
+              <option value="" disabled>
+                Select…
               </option>
-            ))}
-          </select>
+              {countries.map((c) => (
+                <option key={String(c.id)} value={String(c.id)}>
+                  {c.properties?.name}
+                </option>
+              ))}
+            </select>
+            {countryId ? (
+              <div className="smallMuted" style={{ marginTop: 8 }}>
+                Selected: {getCountryName(countryId)}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-          {countryId ? (
+        {step === 1 ? (
+          <div>
+            <label className="smallMuted">City</label>
+            <input
+              list="city-options"
+              value={cityName}
+              onChange={(e) => onChangeCity(e.target.value)}
+              placeholder="Type to search / filter…"
+              style={{ marginTop: 6 }}
+            />
+            <datalist id="city-options">
+              {cityOptions
+                .filter((c) => c.toLowerCase().includes(cityName.trim().toLowerCase()))
+                .slice(0, 50)
+                .map((c) => (
+                  <option key={c} value={c} />
+                ))}
+            </datalist>
             <div className="smallMuted" style={{ marginTop: 8 }}>
-              Country selected: {getCountryName(countryId)}
+              Suggestions come from your existing saved visits in this country (offline-friendly).
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
+
+        {step === 2 ? (
+          <div>
+            <label className="smallMuted">Arrival time</label>
+            <input
+              type="datetime-local"
+              value={arrivalAt}
+              onChange={(e) => onChangeArrivalAt(e.target.value)}
+              style={{ marginTop: 6 }}
+            />
+          </div>
+        ) : null}
+
+        {step === 3 ? (
+          <div>
+            <label className="smallMuted">Departure time</label>
+            <input
+              type="datetime-local"
+              value={departureAt}
+              onChange={(e) => onChangeDepartureAt(e.target.value)}
+              style={{ marginTop: 6 }}
+            />
+            <div className="smallMuted" style={{ marginTop: 8 }}>
+              Departure is optional. Leave blank if unknown.
+            </div>
+          </div>
+        ) : null}
 
         <div style={{ marginTop: 12 }} className="row">
-          <button onClick={onSave} style={{ flex: 1 }}>
-            Save
+          <button onClick={back} disabled={step === 0}>
+            Back
           </button>
-          <button
-            onClick={() => {
-              onChangeCity('');
-              onChangeCountryId('');
-              onChangeVisitedAt('');
-            }}
-          >
-            Reset
-          </button>
+          {step < 3 ? (
+            <button onClick={next} disabled={!canNext} style={{ flex: 1 }}>
+              Next
+            </button>
+          ) : (
+            <button onClick={onSave} style={{ flex: 1 }}>
+              Save
+            </button>
+          )}
         </div>
 
         <div className="smallMuted" style={{ marginTop: 10 }}>
-          After saving, tap another point to add more.
+          Flow: Country → City → Arrival → Departure.
         </div>
       </GlassSurface>
     </div>

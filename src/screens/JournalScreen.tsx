@@ -14,6 +14,19 @@ function readFileAsText(file: File): Promise<string> {
   });
 }
 
+function formatShort(iso: string): string {
+  // Accepts date or datetime.
+  // Show local time for readability.
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+}
+
 export function JournalScreen(props: {
   mode: 'countries' | 'cities' | 'both';
   onChangeMode: (mode: 'countries' | 'cities' | 'both') => void;
@@ -237,7 +250,8 @@ export function JournalScreen(props: {
                     <div style={{ fontWeight: 750 }}>{v.cityName}</div>
                     <div className="smallMuted">
                       {getCountryName(v.countryId)}
-                      {v.visitedAt ? ` • ${v.visitedAt}` : ''}
+                      {v.arrivalAt ? ` • Arrive ${formatShort(v.arrivalAt)}` : ''}
+                      {v.departureAt ? ` → Depart ${formatShort(v.departureAt)}` : ''}
                     </div>
                   </button>
                   <button title="Delete visit" onClick={() => onRemoveVisit(v.id)}>

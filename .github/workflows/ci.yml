@@ -7,7 +7,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,11 +16,8 @@ jobs:
         with:
           node-version: '20'
 
-      # NOTE: We intentionally ignore package-lock.json for now because native optional deps
-      # (Rollup/Esbuild platform binaries) make the lockfile platform-specific and break CI.
-      # See build error: missing @rollup/rollup-linux-x64-gnu.
       - name: Install
-        run: npm install --no-package-lock
+        run: npm install --include=optional
 
       - name: Typecheck
         run: npm run typecheck

@@ -16,25 +16,53 @@ interface TravelDB extends DBSchema {
 }
 
 const DB_NAME = 'travelapp';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbMemo: Promise<IDBPDatabase<TravelDB>> | null = null;
 
 export function db(): Promise<IDBPDatabase<TravelDB>> {
   if (!dbMemo) {
     dbMemo = openDB<TravelDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        const trips = db.createObjectStore('trips', { keyPath: 'id' });
-        trips.createIndex('by-createdAt', 'createdAt');
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          const trips = db.createObjectStore('trips', { keyPath: 'id' });
+          trips.createIndex('by-createdAt', 'createdAt');
 
-        const visits = db.createObjectStore('visits', { keyPath: 'id' });
-        visits.createIndex('by-tripId', 'tripId');
-        visits.createIndex('by-countryId', 'countryId');
-        visits.createIndex('by-createdAt', 'createdAt');
+          const visits = db.createObjectStore('visits', { keyPath: 'id' });
+          visits.createIndex('by-tripId', 'tripId');
+          visits.createIndex('by-countryId', 'countryId');
+          visits.createIndex('by-createdAt', 'createdAt');
+        }
+
+        // v2: rename visitedAt -> arrivalAt/departureAt.
+        // No index changes needed; we migrate existing rows opportunistically.
+        if (oldVersion < 2) {
+          // nothing structural
+        }
       }
     });
   }
   return dbMemo;
+}
+
+// One-time migration helper for v2 schema fields.
+export async function migrateV2IfNeeded(): Promise<void> {
+  const d: any = await db();
+  // idb doesn't expose oldVersion after open; so we detect via presence of legacy field.
+  const all = await d.getAll('visits');
+  let changed = false;
+  for (const v of all) {
+    if (v && 'visitedAt' in v && !('arrivalAt' in v)) {
+      // best-effort: map visitedAt to arrivalAt
+      v.arrivalAt = v.visitedAt;
+      delete v.visitedAt;
+      changed = true;
+      await d.put('visits', v);
+    }
+  }
+  if (changed) {
+    // noop; ensures writes flushed
+  }
 }
 
 export async function listTrips(): Promise<Trip[]> {

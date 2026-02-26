@@ -1,0 +1,2 @@
+// Capacitor Android root settings
+apply from: 'capacitor.settings.gradle'
