@@ -3,7 +3,7 @@ import Globe from 'react-globe.gl';
 import type { CountryFeature } from '../geo/countries';
 import type { Visit } from '../storage/schema';
 
-export type ViewMode = 'countries' | 'cities' | 'both';
+export type ViewMode = 'countries' | 'cities' | 'both' | 'none';
 
 export type GlobeFocus = {
   lat: number;
@@ -40,8 +40,14 @@ export function GlobeView(props: {
   const globeRef = useRef<any>(null);
   const { w, h } = useViewportSize();
 
-  const points = useMemo(() => (mode === 'countries' ? [] : visits), [mode, visits]);
-  const polys = useMemo(() => (mode === 'cities' ? [] : visitedCountries), [mode, visitedCountries]);
+  const showCountries = mode === 'countries' || mode === 'both';
+  const showCities = mode === 'cities' || mode === 'both';
+
+  const points = useMemo(() => (showCities ? visits : []), [showCities, visits]);
+  const polys = useMemo(
+    () => (showCountries ? visitedCountries : []),
+    [showCountries, visitedCountries]
+  );
 
   // Apply focus
   useEffect(() => {

@@ -209,8 +209,8 @@ export function MapLibreView(props: {
 }
 
 function applyModeVisibility(map: MapLibreMap, mode: ViewMode) {
-  const showCountries = mode !== 'cities';
-  const showCities = mode !== 'countries';
+  const showCountries = mode === 'countries' || mode === 'both';
+  const showCities = mode === 'cities' || mode === 'both';
 
   if (map.getLayer('visited-countries-fill')) {
     map.setLayoutProperty(
