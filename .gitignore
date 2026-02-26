@@ -10,11 +10,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Lockfile
-# NOTE: Vite/Rollup/Esbuild use platform-specific optional deps. Committing a single
-# package-lock.json (generated on one OS/CPU) can break installs on other platforms.
-package-lock.json
-
 # OS
 .DS_Store
 

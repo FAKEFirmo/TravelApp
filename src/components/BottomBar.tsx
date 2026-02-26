@@ -102,13 +102,13 @@ export function BottomBar(props: {
       <GlassSurface className="bottomBar">
         <button
           type="button"
-          className={['bottomBarItem', activeTab === 'map' ? 'isActive' : '']
+          className={['bottomBarBtn', activeTab === 'map' ? 'isActive' : '']
             .filter(Boolean)
             .join(' ')}
           onClick={() => onChangeTab('map')}
           aria-label="Map"
         >
-          <span className="bottomBarIcon">
+          <span className="bottomBarPill">
             <IconGlobe />
           </span>
         </button>
@@ -126,13 +126,13 @@ export function BottomBar(props: {
 
         <button
           type="button"
-          className={['bottomBarItem', activeTab === 'journal' ? 'isActive' : '']
+          className={['bottomBarBtn', activeTab === 'journal' ? 'isActive' : '']
             .filter(Boolean)
             .join(' ')}
           onClick={() => onChangeTab('journal')}
           aria-label="Journal"
         >
-          <span className="bottomBarIcon">
+          <span className="bottomBarPill">
             <IconBook />
           </span>
         </button>

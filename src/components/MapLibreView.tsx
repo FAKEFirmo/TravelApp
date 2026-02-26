@@ -24,7 +24,8 @@ function visitsToGeoJson(visits: Visit[]): FeatureCollection<Point> {
         cityName: v.cityName,
         countryId: v.countryId,
         tripId: v.tripId,
-        visitedAt: v.visitedAt ?? null
+        arrivalAt: v.arrivalAt ?? null,
+        departureAt: v.departureAt ?? null
       }
     }))
   };

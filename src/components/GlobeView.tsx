@@ -108,14 +108,19 @@ export function GlobeView(props: {
       polygonSideColor={() => 'rgba(0, 200, 255, 0.12)'}
       polygonStrokeColor={() => 'rgba(0, 0, 0, 0.35)'}
       polygonAltitude={0.01}
-      // Cities
-      pointsData={points}
-      pointLat="lat"
-      pointLng="lng"
-      pointLabel={(d: any) => d?.cityName}
-      pointColor={() => 'rgba(255, 220, 120, 0.9)'}
-      pointRadius={0.25}
-      pointAltitude={0.02}
+      // Cities (📍 pin markers)
+      // Using htmlElements ensures the "tip" of the pin points to the exact coordinate.
+      htmlElementsData={points}
+      htmlLat={(d: any) => d.lat}
+      htmlLng={(d: any) => d.lng}
+      htmlAltitude={() => 0.01}
+      htmlElement={(d: any) => {
+        const el = document.createElement('div');
+        el.className = 'pinMarker';
+        el.title = d?.cityName ?? '';
+        el.textContent = '📍';
+        return el;
+      }}
       // Pick coords
       onGlobeClick={
         onPickCoords ? ({ lat, lng }: any) => onPickCoords({ lat, lng }) : undefined

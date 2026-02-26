@@ -11,7 +11,8 @@ export type Visit = {
   countryId: string; // ISO 3166-1 numeric code, as string (matches world-atlas feature.id)
   lat: number;
   lng: number;
-  visitedAt?: string; // ISO date (yyyy-mm-dd) or ISO datetime
+  arrivalAt?: string; // ISO datetime
+  departureAt?: string; // ISO datetime
   createdAt: string; // ISO
 };
 

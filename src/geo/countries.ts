@@ -19,9 +19,7 @@ export function getAllCountries(): CountryFeature[] {
   const topology: any = countries110m as any;
   const countriesObj = topology.objects.countries;
 
-  // `topojson-client`'s type definitions can resolve this call to a single `Feature`.
-  // At runtime (for world-atlas countries), it is a FeatureCollection, so we cast via `unknown`.
-  const fc = feature(topology, countriesObj) as unknown as FeatureCollection<Polygon | MultiPolygon, any>;
+  const fc = feature(topology, countriesObj) as FeatureCollection<Polygon | MultiPolygon, any>;
 
   // Normalize the properties a bit.
   const list = (fc.features as any[]).map((f) =>
