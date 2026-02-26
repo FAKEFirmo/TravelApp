@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BottomBar, type BottomTab } from './components/BottomBar';
 import { GlassSurface } from './components/GlassSurface';
 import type { GlobeFocus, ViewMode } from './components/GlobeView';
@@ -28,13 +28,14 @@ export default function App() {
 
   const [tab, setTab] = useState<BottomTab>('map');
 
-  const [mode, setMode] = useState<ViewMode>('countries');
+  const [showCountries, setShowCountries] = useState(true);
+  const [showCities, setShowCities] = useState(true);
 
   const [trips, setTrips] = useState<Trip[]>([]);
   const [activeTripId, setActiveTripId] = useState<string>(ALL_TRIPS_ID);
 
   const [visits, setVisits] = useState<Visit[]>([]);
-  const [visitedCountries, setVisitedCountries] = useState<CountryFeature[]>([]);
+  const [allVisits, setAllVisits] = useState<Visit[]>([]);
 
   const [focus, setFocus] = useState<GlobeFocus | null>(null);
 
@@ -49,6 +50,14 @@ export default function App() {
 
   // Add action sheet
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+  const [isLayerSheetOpen, setIsLayerSheetOpen] = useState(false);
+
+  const mode: ViewMode = useMemo(() => {
+    if (showCountries && showCities) return 'both';
+    if (showCountries) return 'countries';
+    if (showCities) return 'cities';
+    return 'none';
+  }, [showCountries, showCities]);
 
   const filteredCountries = useMemo(() => {
     const q = countrySearch.trim().toLowerCase();
@@ -59,13 +68,23 @@ export default function App() {
   const cityOptionsForCountry = useMemo(() => {
     if (!countryId) return [] as string[];
     const set = new Set(
-      visits
+      allVisits
         .filter((v) => String(v.countryId) === String(countryId))
         .map((v) => v.cityName)
         .filter(Boolean)
     );
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [visits, countryId]);
+  }, [allVisits, countryId]);
+
+  const visitedCountries: CountryFeature[] = useMemo(() => {
+    const visitedSet = new Set(visits.map((v) => String(v.countryId)));
+    return allCountries.filter((c) => visitedSet.has(String(c.id)));
+  }, [allCountries, visits]);
+
+  const allVisitedCountries: CountryFeature[] = useMemo(() => {
+    const visitedSet = new Set(allVisits.map((v) => String(v.countryId)));
+    return allCountries.filter((c) => visitedSet.has(String(c.id)));
+  }, [allCountries, allVisits]);
 
   async function refreshTrips() {
     const list = await DB.listTrips();
@@ -89,15 +108,18 @@ export default function App() {
   async function refreshVisits(tripId: string) {
     const list = tripId === ALL_TRIPS_ID ? await DB.listAllVisits() : await DB.listVisits(tripId);
     setVisits(list);
+  }
 
-    const visitedSet = new Set(list.map((v) => String(v.countryId)));
-    setVisitedCountries(allCountries.filter((c) => visitedSet.has(String(c.id))));
+  async function refreshAllVisits() {
+    const list = await DB.listAllVisits();
+    setAllVisits(list);
   }
 
   useEffect(() => {
     // best-effort migration for older local DBs
     DB.migrateV2IfNeeded();
     refreshTrips();
+    refreshAllVisits();
   }, []);
 
   useEffect(() => {
@@ -107,17 +129,20 @@ export default function App() {
   }, [activeTripId]);
 
   async function createTrip() {
-    const title = prompt('Trip title?');
+    const title = prompt('Trip title?')?.trim();
     if (!title) return;
+    const notes = prompt('Trip notes (optional)')?.trim() ?? '';
 
     const t: Trip = {
       id: uid('trip'),
-      title: title.trim(),
+      title,
+      notes: notes || undefined,
       createdAt: new Date().toISOString()
     };
 
     await DB.upsertTrip(t);
     await refreshTrips();
+    await refreshAllVisits();
     setActiveTripId(t.id);
   }
 
@@ -128,6 +153,7 @@ export default function App() {
 
     await DB.deleteTrip(tripId);
     await refreshTrips();
+    await refreshAllVisits();
 
     // If we deleted the currently selected trip, go to All trips.
     if (activeTripId === tripId) {
@@ -139,7 +165,7 @@ export default function App() {
 
   function startAddVisit() {
     if (activeTripId === ALL_TRIPS_ID) {
-      alert('Select a specific trip first (Journal tab → Trip selector).');
+      alert('Select a specific trip first from Journal → Trips.');
       setTab('journal');
       return;
     }
@@ -151,6 +177,7 @@ export default function App() {
     setArrivalAt('');
     setDepartureAt('');
     setCountrySearch('');
+    setIsLayerSheetOpen(false);
     setTab('map');
   }
 
@@ -187,6 +214,7 @@ export default function App() {
 
     await DB.upsertVisit(v);
     await refreshVisits(activeTripId);
+    await refreshAllVisits();
 
     // Fly to the newly added visit.
     setFocus({ lat: v.lat, lng: v.lng, altitude: 1.35 });
@@ -199,15 +227,6 @@ export default function App() {
     setDepartureAt('');
   }
 
-  async function removeVisit(visitId: string) {
-    const v = visits.find((x) => x.id === visitId);
-    const ok = confirm(`Delete visit “${v?.cityName ?? visitId}”?`);
-    if (!ok) return;
-
-    await DB.deleteVisit(visitId);
-    await refreshVisits(activeTripId);
-  }
-
   async function doExport() {
     const bundle = await DB.exportAll();
     downloadJson(`travelapp-export-${new Date().toISOString().slice(0, 10)}.json`, bundle);
@@ -217,11 +236,23 @@ export default function App() {
     await DB.importAll(bundle, { replace });
     await refreshTrips();
     await refreshVisits(activeTripId);
+    await refreshAllVisits();
   }
 
   function onFlyToVisit(v: Visit) {
     setFocus({ lat: v.lat, lng: v.lng, altitude: 1.35 });
     setTab('map');
+  }
+
+  async function saveTripNotes(tripId: string, notes: string) {
+    const trip = trips.find((t) => t.id === tripId);
+    if (!trip) return;
+
+    await DB.upsertTrip({
+      ...trip,
+      notes: notes.trim() ? notes.trim() : undefined
+    });
+    await refreshTrips();
   }
 
   return (
@@ -241,16 +272,14 @@ export default function App() {
         />
       ) : (
         <JournalScreen
-          mode={mode}
-          onChangeMode={setMode}
           trips={trips}
           activeTripId={activeTripId}
           onChangeTrip={setActiveTripId}
-          visits={visits}
-          visitedCountries={visitedCountries}
+          allVisits={allVisits}
+          visitedCountries={allVisitedCountries}
           onCreateTrip={createTrip}
           onRemoveTrip={removeTrip}
-          onRemoveVisit={removeVisit}
+          onSaveTripNotes={saveTripNotes}
           onFlyToVisit={onFlyToVisit}
           onExport={doExport}
           onImport={doImport}
@@ -262,9 +291,29 @@ export default function App() {
         onChangeTab={(next) => {
           setTab(next);
           setIsAddSheetOpen(false);
+          setIsLayerSheetOpen(false);
         }}
-        onPressAdd={() => setIsAddSheetOpen(true)}
+        onPressAdd={() => {
+          setIsAddSheetOpen((prev) => !prev);
+          setIsLayerSheetOpen(false);
+        }}
+        addActive={isAddSheetOpen || isAddingVisit}
+        onLongPressMap={() => {
+          if (tab !== 'map') return;
+          setIsLayerSheetOpen((prev) => !prev);
+          setIsAddSheetOpen(false);
+        }}
       />
+
+      {isLayerSheetOpen && tab === 'map' ? (
+        <MapLayerSheet
+          showCities={showCities}
+          showCountries={showCountries}
+          onClose={() => setIsLayerSheetOpen(false)}
+          onToggleCities={() => setShowCities((prev) => !prev)}
+          onToggleCountries={() => setShowCountries((prev) => !prev)}
+        />
+      ) : null}
 
       {isAddSheetOpen ? (
         <AddActionSheet
@@ -367,7 +416,52 @@ function AddActionSheet(props: {
 
         {!canAddVisit && !isAddingVisit ? (
           <div className="smallMuted" style={{ marginTop: 10 }}>
-            Tip: pick a trip in the Journal tab first.
+            Tip: pick a specific trip in Journal → Trips first.
+          </div>
+        ) : null}
+      </GlassSurface>
+    </div>
+  );
+}
+
+function MapLayerSheet(props: {
+  showCountries: boolean;
+  showCities: boolean;
+  onToggleCountries: () => void;
+  onToggleCities: () => void;
+  onClose: () => void;
+}) {
+  const { showCountries, showCities, onToggleCountries, onToggleCities, onClose } = props;
+
+  return (
+    <div
+      className="sheetBackdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Map layers"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <GlassSurface className="sheet mapLayerSheet">
+        <div className="rowSpace" style={{ marginBottom: 10 }}>
+          <div style={{ fontWeight: 800 }}>Map layers</div>
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        <button className="layerRow" onClick={onToggleCountries}>
+          <span>Countries highlight</span>
+          <span>{showCountries ? 'On' : 'Off'}</span>
+        </button>
+
+        <button className="layerRow" onClick={onToggleCities} style={{ marginTop: 10 }}>
+          <span>Cities pins</span>
+          <span>{showCities ? 'On' : 'Off'}</span>
+        </button>
+
+        {!showCities && !showCountries ? (
+          <div className="smallMuted" style={{ marginTop: 10 }}>
+            Both layers are hidden. Turn one on to show data again.
           </div>
         ) : null}
       </GlassSurface>

@@ -29,7 +29,8 @@ body,
 
 button,
 select,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -53,7 +54,8 @@ button:disabled {
 }
 
 input,
-select {
+select,
+textarea {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(0, 0, 0, 0.2);
   color: white;
@@ -132,13 +134,14 @@ hr {
 
 .bottomBar {
   pointer-events: auto;
-  width: min(360px, calc(100vw - 32px));
-  height: 64px;
+  width: min(320px, calc(100vw - 34px));
+  height: 62px;
   border-radius: 999px;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  padding: 10px 12px;
+  gap: 2px;
+  padding: 7px 8px;
 }
 
 .bottomBarBtn {
@@ -156,8 +159,8 @@ hr {
 }
 
 .bottomBarPill {
-  width: 56px;
-  height: 44px;
+  width: 52px;
+  height: 42px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
@@ -175,21 +178,7 @@ hr {
 }
 
 .bottomBarAdd {
-  justify-self: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
   color: rgba(0, 200, 255, 0.95);
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.bottomBarAdd:hover {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 /* Screens */
@@ -203,8 +192,33 @@ hr {
   position: absolute;
   inset: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 16px;
   padding-bottom: calc(110px + env(safe-area-inset-bottom));
+}
+
+.screenScroll::before,
+.screenScroll::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.screenScroll::before {
+  top: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, rgba(10, 14, 28, 0.75), rgba(10, 14, 28, 0));
+  backdrop-filter: blur(8px);
+}
+
+.screenScroll::after {
+  bottom: 0;
+  height: 86px;
+  background: linear-gradient(to top, rgba(10, 14, 28, 0.9), rgba(10, 14, 28, 0));
+  backdrop-filter: blur(10px);
 }
 
 .card {
@@ -270,6 +284,112 @@ hr {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.mapLayerSheet {
+  width: min(420px, 100%);
+}
+
+.layerRow {
+  width: 100%;
+  justify-content: space-between;
+  display: flex;
+  align-items: center;
+  border-radius: 12px;
+}
+
+.sectionCard {
+  position: relative;
+  z-index: 20;
+}
+
+.blurScrollWrap {
+  position: relative;
+}
+
+.blurScrollList {
+  max-height: 230px;
+  overflow: auto;
+  padding: 8px 0;
+}
+
+.blurTopEdge,
+.blurBottomEdge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.blurTopEdge {
+  top: 0;
+  height: 24px;
+  background: linear-gradient(to bottom, rgba(12, 18, 34, 0.82), rgba(12, 18, 34, 0));
+}
+
+.blurBottomEdge {
+  bottom: 0;
+  height: 24px;
+  background: linear-gradient(to top, rgba(12, 18, 34, 0.82), rgba(12, 18, 34, 0));
+}
+
+.countriesScroll {
+  max-height: 190px;
+  padding-right: 4px;
+}
+
+.countryRow {
+  padding: 8px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: normal;
+  word-break: break-word;
+}
+
+.tripFilterActive {
+  border-color: rgba(0, 200, 255, 0.7);
+  background: rgba(0, 200, 255, 0.2);
+}
+
+.tripsScroll {
+  max-height: 380px;
+  padding-right: 4px;
+}
+
+.tripCard {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.tripCard:active {
+  transform: scale(0.995);
+}
+
+.tripCard.isActive {
+  border-color: rgba(0, 200, 255, 0.45);
+}
+
+.tripCard.isExpanded {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.26);
+}
+
+.tripCitiesList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tripCityRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 10px;
+  width: 100%;
+}
+
 /* Add-visit hint */
 .mapHint {
   position: absolute;
@@ -288,11 +408,6 @@ hr {
 }
 
 /* Reduce visual clutter on the MapLibre map */
-.maplibregl-ctrl-top-right {
-  margin-top: 12px;
-  margin-right: 12px;
-}
-
 .maplibregl-ctrl-group {
   background: rgba(0, 0, 0, 0.45) !important;
   border: 1px solid rgba(255, 255, 255, 0.14) !important;
@@ -303,3 +418,7 @@ hr {
   border: none !important;
 }
 
+.maplibregl-ctrl-top-left,
+.maplibregl-ctrl-top-right {
+  display: none;
+}

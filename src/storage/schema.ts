@@ -1,6 +1,7 @@
 export type Trip = {
   id: string;
   title: string;
+  notes?: string;
   createdAt: string; // ISO
 };
 

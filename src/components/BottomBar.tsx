@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { GlassSurface } from './GlassSurface';
 
 export type BottomTab = 'map' | 'journal';
@@ -94,8 +95,41 @@ export function BottomBar(props: {
   activeTab: BottomTab;
   onChangeTab: (tab: BottomTab) => void;
   onPressAdd: () => void;
+  addActive?: boolean;
+  onLongPressMap?: () => void;
 }) {
-  const { activeTab, onChangeTab, onPressAdd } = props;
+  const { activeTab, onChangeTab, onPressAdd, addActive, onLongPressMap } = props;
+
+  const mapLongPressTimerRef = useRef<number | null>(null);
+  const mapLongPressTriggeredRef = useRef(false);
+  const ignoreNextMapClickRef = useRef(false);
+
+  function clearMapLongPressTimer() {
+    if (mapLongPressTimerRef.current === null) return;
+    window.clearTimeout(mapLongPressTimerRef.current);
+    mapLongPressTimerRef.current = null;
+  }
+
+  function beginMapLongPress() {
+    if (activeTab !== 'map' || !onLongPressMap) return;
+    mapLongPressTriggeredRef.current = false;
+    clearMapLongPressTimer();
+
+    mapLongPressTimerRef.current = window.setTimeout(() => {
+      mapLongPressTriggeredRef.current = true;
+      ignoreNextMapClickRef.current = true;
+      onLongPressMap();
+    }, 1000);
+  }
+
+  function endMapLongPress() {
+    clearMapLongPressTimer();
+    if (mapLongPressTriggeredRef.current) {
+      mapLongPressTriggeredRef.current = false;
+    }
+  }
+
+  useEffect(() => clearMapLongPressTimer, []);
 
   return (
     <div className="bottomBarWrap" role="navigation" aria-label="Main">
@@ -105,7 +139,18 @@ export function BottomBar(props: {
           className={['bottomBarBtn', activeTab === 'map' ? 'isActive' : '']
             .filter(Boolean)
             .join(' ')}
-          onClick={() => onChangeTab('map')}
+          onPointerDown={beginMapLongPress}
+          onPointerUp={endMapLongPress}
+          onPointerCancel={endMapLongPress}
+          onPointerLeave={endMapLongPress}
+          onContextMenu={(e) => e.preventDefault()}
+          onClick={() => {
+            if (ignoreNextMapClickRef.current) {
+              ignoreNextMapClickRef.current = false;
+              return;
+            }
+            onChangeTab('map');
+          }}
           aria-label="Map"
         >
           <span className="bottomBarPill">
@@ -115,11 +160,13 @@ export function BottomBar(props: {
 
         <button
           type="button"
-          className="bottomBarAdd"
+          className={['bottomBarBtn', 'bottomBarAdd', addActive ? 'isActive' : '']
+            .filter(Boolean)
+            .join(' ')}
           onClick={onPressAdd}
           aria-label="Add"
         >
-          <span className="bottomBarAddIcon">
+          <span className="bottomBarPill">
             <IconPlus size={24} />
           </span>
         </button>
