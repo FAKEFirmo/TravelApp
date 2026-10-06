@@ -16,6 +16,7 @@ const list = $('#list');
 let lib: Library = { version: 1, trips: [] };
 let trips: TripView[] = [];
 let current: TripView | null = null, focused: LegView | null = null, detail = false;
+let tab: 'timeline' | 'photos' = 'timeline', query = '';
 let visited = new Set<string>();
 let canSave = false; // stays false if the library failed to load, so we never overwrite it
 
@@ -52,7 +53,8 @@ function showError(msg: string) {
 
 function select(t: TripView | null) {
   if (t !== current) detail = false;
-  current = t; focused = null;
+  current = t; focused = null; tab = 'timeline';
+  if (t) sheet('half');
   render(); globe.refresh();
 }
 
@@ -65,6 +67,7 @@ function fly(points: { lat: number; lng: number }[], leg: LegView | null = null,
 // ---------- Panel ----------
 function render(keepScroll = false) {
   const top = list.scrollTop;
+  if (!current) detail = false;
   $('aside').classList.toggle('detail', detail);
   list.innerHTML = detail && current ? renderDetail(current) : renderList();
   list.scrollTop = keepScroll ? top : 0;
@@ -76,7 +79,10 @@ const code = (p: Place) => esc(p.iata || p.name);
 
 function renderList() {
   if (!trips.length) return `<div class="empty"><b>No trips yet</b>Add your first one with “New trip”.</div>`;
-  return trips.map(t => `
+  const q = norm(query.trim());
+  const shown = q ? trips.filter(t => norm([t.trip.name, ...t.places.map(p => `${p.name} ${p.city?.name ?? ''} ${p.country}`)].join(' ')).includes(q)) : trips;
+  if (!shown.length) return `<div class="empty"><b>No matches</b>No trip or place matches “${esc(query)}”.</div>`;
+  return shown.map(t => `
     <div class="trip swipeable ${t === current ? 'on' : ''}" data-id="${t.trip.id}">
       <div class="swipe">
         <div class="top"><span class="name">${esc(t.trip.name)}</span><span class="modes">${modeIcons(t)}</span></div>
@@ -109,7 +115,9 @@ function renderDetail(t: TripView) {
           <button class="del" data-del-trip="${t.trip.id}">${icon('Trash2')}Delete trip</button></div></details></div>
     <div class="stats">${[[stops.length, 'stops'], [t.trip.activities.length, 'activities'], [t.countries.size, 'countries'], [fmt(t.km), 'km']]
       .map(([v, k]) => `<div class="stat"><b>${v}</b><small>${k}</small></div>`).join('')}</div>
-    <ol class="tl">${t.stops.map((s, i) => {
+    <div class="seg"><button class="${tab === 'timeline' ? 'on' : ''}" data-tab="timeline">Timeline</button>
+      <button class="${tab === 'photos' ? 'on' : ''}" data-tab="photos">Photos · ${tripPhotos(t).length}</button></div>
+    ${tab === 'photos' ? renderPhotos(t) : `<ol class="tl">${t.stops.map((s, i) => {
       const l = s.depart;
       return `
       <li class="stop ${s.transit ? 'transit' : ''}"><span class="pin"></span>
@@ -129,7 +137,15 @@ function renderDetail(t: TripView) {
         <span>${MODES[l.mode].label}${l.info ? ' · ' + esc(l.info) : ''}${l.aircraft && AIRCRAFT[l.aircraft] ? ' · ' + AIRCRAFT[l.aircraft].short : ''} · ${dfmt(l.date)}</span>
         <span class="km">${fmt(l.km)} km</span></li>${l === focused && l.mode === 'flight' ? `<li class="fcw">${flightCard(l)}</li>` : ''}` : ''}`;
     }).join('')}
-    </ol>`;
+    </ol>`}`;
+}
+
+/** Every photo of a trip in timeline order, with the activity it belongs to */
+const tripPhotos = (t: TripView) => t.stops.flatMap(s => s.acts.flatMap(a => a.photos.map(id => ({ id, a }))));
+function renderPhotos(t: TripView) {
+  const ps = tripPhotos(t);
+  if (!ps.length) return `<div class="empty"><b>No photos yet</b>Add photos to an activity and they'll show up here.</div>`;
+  return `<div class="pgrid">${ps.map(p => `<img src="${photoUrl(p.id, true)}" alt="${esc(p.a.title)}" data-photo="${p.id}">`).join('')}</div>`;
 }
 
 // Top-down silhouette from length / wingspan / engines; fixed 84 m frame so planes compare to scale
@@ -173,9 +189,10 @@ list.addEventListener('click', async e => {
   if (q('[data-edit-trip]')) { q('details')?.removeAttribute('open'); return openTrip(current!.trip); }
   if ((el = q('[data-del-act]'))) return deleteAct(findAct(el.dataset.delAct!));
   if ((el = q('[data-edit-act]'))) return openAct(current!.stops.find(s => s.acts.some(a => a.id === el!.dataset.editAct))!, findAct(el.dataset.editAct!));
-  if ((el = q('[data-photo]'))) { $<HTMLImageElement>('#lightbox img').src = photoUrl(el.dataset.photo!); return $<HTMLDialogElement>('#lightbox').showModal(); }
+  if ((el = q('[data-photo]'))) return openGallery(el.dataset.photo!);
   if ((el = q('[data-add]'))) return openAct(current!.stops[+el.dataset.add!]);
-  if (q('[data-open]')) { detail = true; render(); return globe.refresh(true); }
+  if (q('[data-open]')) { detail = true; sheet('full'); render(); return globe.refresh(true); }
+  if ((el = q('[data-tab]'))) { tab = el.dataset.tab as typeof tab; return render(); }
   if (q('[data-back]')) return back();
   if ((el = q('[data-act]'))) return fly([findAct(el.dataset.act!)], null, 0.07);
   if ((el = q('[data-stop]'))) {
@@ -187,12 +204,91 @@ list.addEventListener('click', async e => {
 });
 enableSwipe(list);
 
-function back() { detail = false; focused = null; render(); globe.refresh(true); }
+function back() { detail = false; focused = null; tab = 'timeline'; sheet('half'); render(); globe.refresh(true); }
 $('#all').onclick = () => select(null);
+$<HTMLInputElement>('#search').addEventListener('input', e => {
+  query = (e.target as HTMLInputElement).value;
+  if (detail) back(); else render();
+  if (query) sheet('half');
+});
 addEventListener('keydown', e => {
   if (e.key === 'Escape' && !document.querySelector('dialog[open]')) detail ? back() : select(null);
 });
-$('#lightbox').onclick = () => $<HTMLDialogElement>('#lightbox').close();
+// ---------- Photo viewer: arrows, keys or swipe through the whole trip ----------
+const lightbox = $<HTMLDialogElement>('#lightbox');
+let gallery: { id: string; a: Activity }[] = [], gi = 0, swipeX: number | null = null, swiped = false;
+function showPhoto(i: number) {
+  gi = (i + gallery.length) % gallery.length;
+  const { id, a } = gallery[gi];
+  lightbox.querySelector('img')!.src = photoUrl(id);
+  lightbox.querySelector('.cap')!.textContent = `${a.title} · ${dfmt(a.date)}${gallery.length > 1 ? ` · ${gi + 1}/${gallery.length}` : ''}`;
+}
+function openGallery(id: string) {
+  gallery = current ? tripPhotos(current) : [];
+  if (!gallery.some(p => p.id === id)) return;
+  lightbox.toggleAttribute('data-single', gallery.length < 2);
+  showPhoto(gallery.findIndex(p => p.id === id));
+  lightbox.showModal();
+}
+lightbox.querySelector('.prev')!.innerHTML = icon('ChevronLeft');
+lightbox.querySelector('.next')!.innerHTML = icon('ChevronRight');
+lightbox.addEventListener('click', e => {
+  const nav = (e.target as Element).closest<HTMLElement>('[data-step]');
+  if (nav) showPhoto(gi + +nav.dataset.step!);
+  else if (!swiped) lightbox.close();
+  swiped = false;
+});
+lightbox.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') showPhoto(gi + (e.key === 'ArrowRight' ? 1 : -1));
+});
+lightbox.addEventListener('pointerdown', e => { swipeX = e.clientX; });
+lightbox.addEventListener('pointerup', e => {
+  if (swipeX === null) return;
+  const dx = e.clientX - swipeX; swipeX = null;
+  if (Math.abs(dx) > 50 && gallery.length > 1) { swiped = true; showPhoto(gi + (dx < 0 ? 1 : -1)); }
+});
+
+// ---------- Bottom sheet (phones): collapsed / half / full, dragged by the grabber or header ----------
+const aside = $('aside'), phone = matchMedia('(max-width: 760px)');
+type Detent = 'collapsed' | 'half' | 'full';
+let detent: Detent = 'collapsed';
+function detentY(d: Detent) {
+  const h = aside.offsetHeight;
+  const peek = $('#grab').offsetHeight + $('header').offsetHeight + 8; // grabber + title + stats + search
+  return d === 'full' ? 0 : d === 'half' ? Math.round(h * 0.42) : Math.max(0, h - peek);
+}
+function placeSheet(y: number) {
+  aside.style.setProperty('--sheet-y', y + 'px');
+  // keep the globe centred in the space above the sheet
+  // (sheet top on screen = offsetTop + y; free area is [0, top], its centre vs. the screen centre)
+  globe.offset(phone.matches ? Math.min(0, (aside.offsetTop + y) / 2 - innerHeight / 2) : 0);
+}
+function sheet(d: Detent) {
+  detent = d;
+  if (phone.matches) placeSheet(detentY(d));
+}
+{
+  let y0 = 0, start = 0, dragging = false;
+  const down = (e: PointerEvent) => {
+    if ((e.target as Element).closest('input, button') || !phone.matches) return;
+    dragging = true; y0 = e.clientY; start = detentY(detent);
+    aside.classList.add('dragging');
+  };
+  $('#grab').addEventListener('pointerdown', down);
+  $('header').addEventListener('pointerdown', down);
+  addEventListener('pointermove', e => { if (dragging) placeSheet(Math.max(0, start + e.clientY - y0)); });
+  addEventListener('pointerup', e => {
+    if (!dragging) return;
+    dragging = false; aside.classList.remove('dragging');
+    const y = start + e.clientY - y0;
+    if (Math.abs(e.clientY - y0) < 6) return sheet(detent === 'collapsed' ? 'half' : detent); // tap on grabber opens
+    // snap to the nearest detent (detail view can't collapse below half)
+    const ds: Detent[] = detail ? ['half', 'full'] : ['collapsed', 'half', 'full'];
+    sheet(ds.reduce((a, b) => Math.abs(detentY(b) - y) < Math.abs(detentY(a) - y) ? b : a));
+  });
+  addEventListener('resize', () => sheet(detent));
+  phone.addEventListener('change', () => { aside.style.removeProperty('--sheet-y'); sheet(detent); });
+}
 
 async function deleteTrip(trip: Trip) {
   const photos = trip.activities.reduce((s, a) => s + a.photos.length, 0);
@@ -391,23 +487,25 @@ $('#thumbs').addEventListener('click', e => {
 actForm.querySelector('form')!.addEventListener('submit', async e => {
   if (e.submitter?.getAttribute('value') !== 'save') return;
   e.preventDefault(); // close only once photos are stored
-  const f = new FormData(e.target as HTMLFormElement), btn = $<HTMLButtonElement>('#actSave');
+  // Snapshot inputs now: photo processing is async and the form may be reset before it finishes
+  const f = new FormData(e.target as HTMLFormElement), files = [...field(actForm, 'photos').files ?? []], gone = new Set(removed);
+  const stop = actStop!, editingAct = actEditing, trip = current!.trip, btn = $<HTMLButtonElement>('#actSave');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     const added: string[] = [];
-    for (const file of field(actForm, 'photos').files ?? []) added.push(await addPhoto(file));
-    const a: Activity = actEditing ?? { id: crypto.randomUUID(), stop: '', kind: 'museum', title: '', date: '', lat: 0, lng: 0, photos: [] };
+    for (const file of files) added.push(await addPhoto(file));
+    const a: Activity = editingAct ?? { id: crypto.randomUUID(), stop: '', kind: 'museum', title: '', date: '', lat: 0, lng: 0, photos: [] };
     // ponytail: activities sit on their stop's city until offline maps allow dropping a precise pin
-    const city = cityOf(actStop!.place);
+    const city = cityOf(stop.place);
     Object.assign(a, {
       stop: city.id, lat: city.lat, lng: city.lng, kind: f.get('kind') as Kind,
       title: String(f.get('title')).trim(), date: String(f.get('date')), note: String(f.get('note')).trim(),
-      photos: [...a.photos.filter(p => !removed.has(p)), ...added],
+      photos: [...a.photos.filter(p => !gone.has(p)), ...added],
     });
-    if (!actEditing) current!.trip.activities.push(a);
+    if (!editingAct) trip.activities.push(a);
     actForm.close();
     await commit();
-    for (const p of removed) deletePhoto(p).catch(console.error);
+    for (const p of gone) deletePhoto(p).catch(console.error);
   } catch (err) {
     showError(`Could not save the activity: ${err}`);
   } finally {
@@ -418,6 +516,9 @@ actForm.querySelector('form')!.addEventListener('submit', async e => {
 // ---------- Static bits ----------
 $('#all').innerHTML = `${icon('Globe')}All trips`;
 $('#newTrip').innerHTML = `${icon('Plus')}New trip`;
+$('#fab').innerHTML = icon('Plus');
+$('#fab').onclick = () => openTrip();
+$('#layers').innerHTML = icon('Layers');
 $('#addLeg').innerHTML = `${icon('Plus')}Add leg`;
 $('#legend').innerHTML = Object.values(MODES)
   .map(m => `<span style="color:${m.color}">${icon(m.icon)} <span style="color:var(--text)">${m.label}</span></span>`).join('');
@@ -426,9 +527,15 @@ document.body.insertAdjacentHTML('beforeend', `<datalist id="aircraftList">${
 $('.views').addEventListener('click', e => {
   const v = (e.target as HTMLElement).dataset.view;
   if (!v) return;
-  document.querySelectorAll<HTMLElement>('.views button').forEach(b => b.classList.toggle('on', b.dataset.view === v));
-  globe.satellite(v === 'satellite');
+  setView(v === 'satellite');
 });
+let satellite = false;
+function setView(sat: boolean) {
+  satellite = sat;
+  document.querySelectorAll<HTMLElement>('.views button').forEach(b => b.classList.toggle('on', (b.dataset.view === 'satellite') === sat));
+  globe.satellite(sat);
+}
+$('#layers').onclick = () => setView(!satellite);
 
 // Static starfield behind the globe
 function stars() {
@@ -449,5 +556,5 @@ try {
   showError(`Could not open your library (${e}). Nothing will be overwritten; a backup is kept as library.bak.json.`);
 }
 for (const t of lib.trips) for (const l of t.legs) for (const p of [l.from, l.to]) { known.set(p.id, p); if (p.city) known.set(p.city.id, p.city); }
-rebuild(); render(); globe.refresh();
+rebuild(); render(); globe.refresh(); sheet('collapsed');
 loadCatalog().catch(e => showError(`Could not load the place catalog: ${e}`));

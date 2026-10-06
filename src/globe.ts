@@ -93,8 +93,7 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
   paint();
   globe.controls().autoRotateSpeed = 0.35;
 
-  // Phone layout: the sheet covers the bottom ~46%, so fit the globe above it
-  const fit = () => globe.width(innerWidth).height(innerWidth <= 760 ? innerHeight * 0.56 : innerHeight);
+  const fit = () => globe.width(innerWidth).height(innerHeight);
   addEventListener('resize', fit); fit();
 
   fetch(worldUrl).then(r => r.json())
@@ -140,6 +139,8 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       globe.arcColor(arcColor);
       globe.pointOfView(centre(points, min), 1000);
     },
+    /** Shift the globe vertically (px) so it stays centred in the area a bottom sheet leaves free */
+    offset(y: number) { globe.globeOffset([0, y]); },
     satellite(on: boolean) {
       sat = on;
       globe.globeImageUrl(on ? satelliteUrl : null as any)

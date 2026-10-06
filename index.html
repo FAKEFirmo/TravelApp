@@ -12,9 +12,11 @@
   <div id="globe"></div>
 
   <aside>
+    <div class="grab" id="grab" title="Drag to resize"><i></i></div>
     <header>
-      <h1>Little <span>Prince</span></h1>
+      <div class="hrow"><h1>Little <span>Prince</span></h1><button class="fab" id="fab" title="New trip"></button></div>
       <div class="stats" id="stats"></div>
+      <input id="search" type="search" placeholder="Search trips" autocomplete="off">
     </header>
     <div class="list" id="list"></div>
     <footer>
@@ -27,6 +29,7 @@
     <button data-view="stylized" class="on">Stylized</button>
     <button data-view="satellite">Satellite</button>
   </div>
+  <button class="layers" id="layers" title="Map style"></button>
   <div class="legend" id="legend"></div>
   <div class="hint">Click an arc, a dot or a trip · swipe a trip left to delete · Esc for overview</div>
 
@@ -56,6 +59,10 @@
     <div class="actions"><button value="cancel">Cancel</button><button class="danger" value="ok">Delete</button></div>
   </form></dialog>
 
-  <dialog id="lightbox"><img alt=""></dialog>
+  <dialog id="lightbox">
+    <img alt="">
+    <p class="cap"></p>
+    <button class="nav prev" data-step="-1" title="Previous"></button><button class="nav next" data-step="1" title="Next"></button>
+  </dialog>
 </body>
 </html>

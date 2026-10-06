@@ -1,13 +1,13 @@
 // Small UI helpers shared by the globe and the panel.
 import {
   createElement, Plane, TrainFront, Bus, Car, Ship, Landmark, Camera, TreePalm, MountainSnow, Footprints, UtensilsCrossed,
-  ArrowLeft, Plus, Globe, ChevronRight, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map,
+  ArrowLeft, Plus, Globe, ChevronRight, ChevronLeft, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map, Layers,
 } from 'lucide';
 
 // Only the icons we use, so the bundle stays small
 const ICONS = {
   Plane, TrainFront, Bus, Car, Ship, Landmark, Camera, TreePalm, MountainSnow, Footprints, UtensilsCrossed,
-  ArrowLeft, Plus, Globe, ChevronRight, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map,
+  ArrowLeft, Plus, Globe, ChevronRight, ChevronLeft, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map, Layers,
 };
 export const icon = (name: string) => {
   const el = createElement(ICONS[name as keyof typeof ICONS]);

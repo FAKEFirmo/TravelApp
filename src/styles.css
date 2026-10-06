@@ -151,10 +151,52 @@ input:focus, textarea:focus { outline: 2px solid rgba(255,209,102,.5); outline-o
 select { font: inherit; color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--line);
   border-radius: 10px; padding: 9px 8px; color-scheme: dark; min-width: 0; }
 .hint { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); color: var(--muted); font-size: 12px; }
+/* Header extras: search everywhere; grabber, + and layers buttons only on phones */
+.hrow { display: flex; align-items: center; justify-content: space-between; }
+#search { margin-top: 12px; padding: 7px 10px; }
+.grab, .fab, .layers { display: none; }
+.fab { flex: none; width: 34px; height: 34px; padding: 0; border-radius: 50%; background: var(--gold); color: #1b1b2f; border: 0; }
+.fab svg.lucide, .layers svg.lucide { margin: 0; width: 18px; height: 18px; }
+
+/* Trip detail: Timeline | Photos */
+.seg { display: flex; padding: 2px; margin: 4px 4px 10px; border-radius: 9px; background: rgba(255,255,255,.05); }
+.seg button { padding: 5px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 13px; }
+.seg button.on { background: rgba(255,255,255,.12); color: var(--text); }
+.pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 0 4px 10px; }
+.pgrid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; cursor: zoom-in; }
+
+/* Photo viewer */
+#lightbox { padding: 0; overflow: visible; }
+#lightbox .cap { margin: 8px 0 0; text-align: center; color: var(--text); font-size: 13px; text-shadow: 0 1px 4px #000; }
+#lightbox .nav { position: fixed; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; padding: 0; border-radius: 50%;
+  background: rgba(11,16,38,.7); border: 0; }
+#lightbox .nav svg.lucide { margin: 0; width: 20px; height: 20px; }
+#lightbox .prev { left: max(12px, env(safe-area-inset-left)); }
+#lightbox .next { right: max(12px, env(safe-area-inset-right)); }
+#lightbox[data-single] .nav { display: none; }
+
 @media (max-width: 760px) {
-  aside, aside.detail { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 46vh; border-radius: 18px 18px 0 0; }
-  footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
-  .legend, .hint { display: none; }
+  /* Bottom sheet (Apple Maps style): JS moves it between collapsed / half / full via --sheet-y */
+  aside, aside.detail { top: calc(env(safe-area-inset-top) + 56px); left: 0; right: 0; bottom: 0; width: auto;
+    border-radius: 18px 18px 0 0; border-bottom: 0; transform: translateY(var(--sheet-y, 60%)); transition: transform .32s cubic-bezier(.2,.8,.2,1); }
+  aside.dragging { transition: none; }
+  .grab { display: block; flex: none; padding: 8px 0 2px; cursor: grab; touch-action: none; }
+  .grab i { display: block; width: 36px; height: 5px; margin: 0 auto; border-radius: 3px; background: #4a5280; }
+  header { padding-top: 4px; touch-action: none; }
+  .list { padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
+  .fab, .layers { display: grid; place-items: center; }
+  .layers { position: fixed; top: var(--st); right: var(--sr); width: 40px; height: 40px; padding: 0; border-radius: 12px;
+    background: var(--panel); backdrop-filter: blur(14px); }
+  footer, .views, .legend, .hint { display: none; }
+  /* Forms become full-screen sheets with Cancel / Save on top */
+  dialog:not(#lightbox):not(#ask) { width: 100%; max-width: none; height: calc(100% - env(safe-area-inset-top) - 12px);
+    max-height: none; margin: auto 0 0; border-radius: 16px 16px 0 0; }
+  dialog form { position: relative; padding-bottom: calc(env(safe-area-inset-bottom) + 18px); }
+  dialog:not(#ask) form .actions { order: -1; margin: -4px 0 4px; justify-content: space-between; }
+  dialog:not(#ask) form .actions button { flex: none; background: none; border: 0; padding: 6px 2px; color: var(--gold); }
+  dialog:not(#ask) form .actions .primary { font-weight: 700; }
+  dialog:not(#ask) h3 { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); font-size: 15px; white-space: nowrap; }
+  dialog:not(#ask) h3 small { display: none; }
 }
 
 /* Swipe-to-reveal rows */

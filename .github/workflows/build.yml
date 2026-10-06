@@ -23,7 +23,7 @@ jobs:
         working-directory: src-tauri
       # ponytail: unsigned build; add Apple signing secrets when distributing outside this Mac
       - run: npx tauri build --bundles dmg
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: little-prince-macos
           path: src-tauri/target/release/bundle/dmg/*.dmg
@@ -50,7 +50,7 @@ jobs:
           echo "Found: $app"
           test -n "$app"
           ditto -c -k --keepParent "$app" little-prince-ios-simulator.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: little-prince-ios-simulator
           path: little-prince-ios-simulator.zip
