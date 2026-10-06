@@ -1,6 +1,9 @@
 // The 3D globe: countries, trip arcs, stop + activity markers, camera moves.
 import Globe from 'globe.gl';
-import { TextureLoader, SRGBColorSpace } from 'three';
+import { TextureLoader, SRGBColorSpace, Group, Mesh, MeshBasicMaterial, LineSegments, LineBasicMaterial, BufferAttribute, Color } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import ConicPolygonGeometry from 'three-conic-polygon-geometry';
+import GeoJsonGeometry from 'three-geojson-geometry';
 import worldUrl from 'world-atlas/countries-50m.json?url';
 import satelliteUrl from './assets/earth-blue-marble.jpg';
 import { countryFeatures } from './world';
@@ -12,13 +15,64 @@ export interface GlobeState {
 }
 export interface GlobeEvents { trip(t: TripView): void; place(p: Place): void; act(a: Activity): void }
 
-const STYLE = { ocean: '#13204a', land: '#2b4580', hover: '#3a5a9c', visited: '#e3b25a', border: 'rgba(205,218,255,.28)' };
+const STYLE = { ocean: '#13204a', land: '#2b4580', visited: '#e3b25a', border: '#cddaff' };
 const range = (a: number, b: number, step: number) => Array.from({ length: Math.floor((b - a) / step) + 1 }, (_, i) => a + i * step);
-// Graticule every 30°, under the land so it only shows on the ocean
+// Graticule every 30° as [lng, lat] lines, under the land so it only shows on the ocean
 const GRID = [
-  ...range(-180, 150, 30).map(lng => range(-90, 90, 3).map(lat => [lat, lng])),
-  ...range(-60, 60, 30).map(lat => range(-180, 180, 3).map(lng => [lat, lng])),
+  ...range(-180, 150, 30).map(lng => range(-90, 90, 3).map(lat => [lng, lat])),
+  ...range(-60, 60, 30).map(lat => range(-180, 180, 3).map(lng => [lng, lat])),
 ];
+// Radii (globe radius 100) of the layers above the ocean sphere; gaps sized for the camera's near plane below
+const R = { grid: 100.1, land: 100.3, border: 100.4 };
+const noRaycast = () => {}; // these layers never need picking: skipping them keeps pointer moves cheap
+
+/**
+ * All countries as ONE mesh (+ one line object for borders, one for the grid) instead of ~3 objects per
+ * country: 3 draw calls instead of ~720, and nothing to hit-test while dragging. Colours live in a
+ * per-vertex buffer so selecting a trip just rewrites numbers.
+ */
+function countryLayer(features: any[]) {
+  const ranges: { name: string; start: number; count: number }[] = [];
+  const caps: any[] = [];
+  let vertices = 0;
+  for (const f of features) {
+    const polys: number[][][][] = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const start = vertices;
+    for (const poly of polys) {
+      let g = new ConicPolygonGeometry(poly, 0, R.land, false, true, false, 5);
+      if (g.index) { const flat = g.toNonIndexed(); g.dispose(); g = flat; } // count vertices as merged
+      g.clearGroups();
+      vertices += g.attributes.position.count;
+      caps.push(g);
+    }
+    ranges.push({ name: f.properties.name, start, count: vertices - start });
+  }
+  const land = mergeGeometries(caps);
+  caps.forEach(g => g.dispose());
+  land.setAttribute('color', new BufferAttribute(new Float32Array(land.attributes.position.count * 3), 3));
+  const landMesh = new Mesh(land, new MeshBasicMaterial({ vertexColors: true }));
+  const borders = new LineSegments(
+    new GeoJsonGeometry({ type: 'MultiPolygon', coordinates: features.flatMap(f => f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates) }, R.border, 5),
+    new LineBasicMaterial({ color: STYLE.border, transparent: true, opacity: 0.28 }));
+  const grid = new LineSegments(new GeoJsonGeometry({ type: 'MultiLineString', coordinates: GRID }, R.grid, 3),
+    new LineBasicMaterial({ color: '#aabeff', transparent: true, opacity: 0.1, depthWrite: false }));
+  const group = new Group();
+  group.add(grid, landMesh, borders);
+  for (const o of [landMesh, borders, grid]) o.raycast = noRaycast;
+  const c = new Color(), colors = land.attributes.color;
+  return {
+    group,
+    paint(visited: Set<string>, sat: boolean) {
+      landMesh.visible = grid.visible = !sat;
+      borders.material.opacity = sat ? 0.18 : 0.28;
+      for (const r of ranges) {
+        c.set(visited.has(r.name) ? STYLE.visited : STYLE.land);
+        for (let i = r.start; i < r.start + r.count; i++) colors.setXYZ(i, c.r, c.g, c.b);
+      }
+      colors.needsUpdate = true;
+    },
+  };
+}
 const rad = (d: number) => d * Math.PI / 180;
 
 /** Spherical mean of points → camera target that fits them (handles the antimeridian) */
@@ -35,31 +89,18 @@ export function centre(points: { lat: number; lng: number }[], min = 0.35) {
 type Mark = { lat: number; lng: number; p?: Place; label?: boolean; a?: Activity; more?: number };
 
 export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeEvents) {
-  let hovered: object | null = null, sat = false, lastAlt = 2.4, satTex: any = null;
+  let sat = false, lastAlt = 2.4, satTex: any = null, layer: ReturnType<typeof countryLayer> | null = null, zoomTimer = 0;
   const s = state;
-  const capColor = (f: any) => {
-    if (sat) return f === hovered ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,0)';
-    const { current, visited } = s();
-    return (current ? current.countries : visited).has(f.properties.name) ? STYLE.visited : f === hovered ? STYLE.hover : STYLE.land;
-  };
+  const paintCountries = () => { const { current, visited } = s(); layer?.paint(current ? current.countries : visited, sat); };
   const arcColor = (l: any) => {
     const { current, focused } = s();
     return rgba(MODES[l.mode as keyof typeof MODES].color, !current ? 0.7 : focused && l !== focused ? 0.2 : 1);
   };
 
-  // Log depth buffer: stops country caps, borders and grid lines (fractions of a unit apart) flickering
-  const globe = new Globe(el, { rendererConfig: { antialias: true, logarithmicDepthBuffer: true } })
+  const globe = new Globe(el, { rendererConfig: { antialias: true, powerPreference: 'high-performance' } })
     .backgroundColor('rgba(0,0,0,0)')
     .atmosphereColor('#9fb4ff').atmosphereAltitude(0.18)
-    .polygonSideColor(() => 'rgba(0,0,0,0)')
-    .polygonStrokeColor(() => STYLE.border)
-    .polygonCapColor(capColor)
-    .polygonAltitude(0.004)
-    .polygonsTransitionDuration(0)
-    .polygonLabel((f: any) => esc(f.properties.name))
-    .onPolygonHover((f: object | null) => { hovered = f; globe.polygonCapColor(capColor); })
-    .pathsData(GRID).pathPointLat((p: any) => p[0]).pathPointLng((p: any) => p[1]).pathPointAlt(0.0015)
-    .pathColor(() => 'rgba(170,190,255,.10)').pathStroke(null as any).pathTransitionDuration(0)
+    .customLayerData([]).customThreeObject(() => layer!.group)
     .arcStartLat((l: any) => l.from.lat).arcStartLng((l: any) => l.from.lng)
     .arcEndLat((l: any) => l.to.lat).arcEndLng((l: any) => l.to.lng)
     .arcColor(arcColor)
@@ -84,7 +125,8 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       }
       return el;
     })
-    .onZoom(({ altitude }: { altitude: number }) => scale(altitude));
+    // Rebuilding arcs/markers is the costly part of a zoom: do it once the gesture pauses
+    .onZoom(({ altitude }: { altitude: number }) => { clearTimeout(zoomTimer); zoomTimer = setTimeout(() => scale(altitude), 120); });
 
   const mat = globe.globeMaterial() as any;
   const paint = () => {
@@ -98,12 +140,19 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
   controls.minDistance = 106; controls.maxDistance = 520;
   // Phones are 3x: rendering at 2x looks the same and halves the GPU work
   globe.renderer().setPixelRatio(Math.min(devicePixelRatio, 2));
+  // Near plane at 1 (the camera never gets closer than ~6 units to the surface) gives the depth buffer enough
+  // precision to keep grid, land and borders apart without the slower logarithmic depth buffer
+  const camera = globe.camera() as any;
+  camera.near = 1; camera.updateProjectionMatrix();
 
   const fit = () => globe.width(innerWidth).height(innerHeight);
   addEventListener('resize', fit); fit();
 
-  fetch(worldUrl).then(r => r.json())
-    .then((w: any) => globe.polygonsData(countryFeatures(w)));
+  fetch(worldUrl).then(r => r.json()).then((w: any) => {
+    layer = countryLayer(countryFeatures(w));
+    paintCountries();
+    globe.customLayerData([{}]); // new datum → globe.gl asks customThreeObject for the (now built) layer
+  });
 
   // Keep arcs a near-constant screen width and declutter markers for the current zoom
   function scale(alt: number, force = false) {
@@ -135,7 +184,8 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       const { trips, current } = s();
       globe.arcsData(current ? current.legs : trips.flatMap(t => t.legs))
         .arcDashLength(current ? 0.5 : 1).arcDashGap(current ? 0.08 : 0).arcDashAnimateTime(current ? 2500 : 0)
-        .arcColor(arcColor).polygonCapColor(capColor);
+        .arcColor(arcColor);
+      paintCountries();
       globe.controls().autoRotate = !current;
       const pov = current ? centre(current.places) : { altitude: 2.4 };
       if (!stay && current?.places.length !== 0) globe.pointOfView(pov, 1200);
@@ -153,9 +203,7 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       // switching back to stylized and tint the ocean almost black
       satTex ??= new TextureLoader().load(satelliteUrl, (t: any) => { t.colorSpace = SRGBColorSpace; mat.needsUpdate = true; });
       mat.map = on ? satTex : null; mat.needsUpdate = true;
-      globe.polygonCapColor(capColor)
-        .polygonStrokeColor(() => on ? 'rgba(255,255,255,.12)' : STYLE.border)
-        .pathsData(on ? [] : GRID);
+      paintCountries();
       paint();
     },
   };
