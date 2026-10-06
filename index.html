@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Little Prince</title>
+  <link rel="stylesheet" href="/src/styles.css" />
+  <script type="module" src="/src/main.ts"></script>
+</head>
+<body>
+  <canvas id="stars"></canvas>
+  <div id="globe"></div>
+
+  <aside>
+    <header>
+      <h1>Little <span>Prince</span></h1>
+      <div class="stats" id="stats"></div>
+    </header>
+    <div class="list" id="list"></div>
+    <footer>
+      <button id="all"></button>
+      <button class="primary" id="newTrip"></button>
+    </footer>
+  </aside>
+
+  <div class="views">
+    <button data-view="stylized" class="on">Stylized</button>
+    <button data-view="satellite">Satellite</button>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="hint">Click an arc, a dot or a trip · swipe a trip left to delete · Esc for overview</div>
+
+  <dialog id="tripForm"><form method="dialog">
+    <h3 id="tripTitle">New trip</h3>
+    <label class="f">Name<input name="name" required maxlength="80" placeholder="Summer in Greece"></label>
+    <div id="legRows"></div>
+    <button type="button" class="add-leg" id="addLeg"></button>
+    <div class="actions"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save">Save trip</button></div>
+    <ul class="suggest" id="suggest" hidden></ul>
+  </form></dialog>
+
+  <dialog id="actForm"><form method="dialog">
+    <h3><span id="actTitle">Add activity</span><small id="actStop"></small></h3>
+    <div class="chips" id="kinds"></div>
+    <label class="f">Title<input name="title" required maxlength="120" placeholder="Acropolis Museum"></label>
+    <div class="row"><label class="f">Date<input name="date" type="date" required></label></div>
+    <label class="f">Note<textarea name="note" rows="2" maxlength="2000" placeholder="Optional"></textarea></label>
+    <label class="drop"><span id="dropLabel"></span>
+      <input name="photos" type="file" accept="image/*" multiple></label>
+    <div class="thumbs" id="thumbs"></div>
+    <div class="actions"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save" id="actSave">Save</button></div>
+  </form></dialog>
+
+  <dialog id="ask"><form method="dialog">
+    <p></p>
+    <div class="actions"><button value="cancel">Cancel</button><button class="danger" value="ok">Delete</button></div>
+  </form></dialog>
+
+  <dialog id="lightbox"><img alt=""></dialog>
+</body>
+</html>
