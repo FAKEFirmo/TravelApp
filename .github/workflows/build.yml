@@ -54,3 +54,20 @@ jobs:
         with:
           name: little-prince-ios-simulator
           path: little-prince-ios-simulator.zip
+
+  # Web / home-screen version on GitHub Pages: https://fakefirmo.github.io/TravelApp/
+  # (open in Safari → Share → Add to Home Screen; works offline, data stays on the device)
+  web:
+    runs-on: ubuntu-latest
+    permissions: { pages: write, id-token: write }
+    environment: { name: github-pages, url: "${{ steps.deploy.outputs.page_url }}" }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v4
+        with: { path: dist }
+      - id: deploy
+        uses: actions/deploy-pages@v4

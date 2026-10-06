@@ -6,6 +6,11 @@ Everything stays on the device: no account, no network.
 
 Platforms: macOS first, then Android (Samsung), then Windows. Built with [Tauri 2](https://tauri.app), TypeScript and [globe.gl](https://globe.gl).
 
+## Try it
+
+- **Web / iPhone, no App Store needed:** open <https://fakefirmo.github.io/TravelApp/> in Safari, then tap Share → **Add to Home Screen**. It runs full-screen and works offline. Trips and photos are stored only on that device.
+- **macOS:** download the `.dmg` from the latest [Build run](https://github.com/FAKEFirmo/TravelApp/actions/workflows/build.yml) → *Artifacts*. The app is unsigned, so the first time right-click it and choose **Open**.
+
 ## Develop
 
 Requires Node 22+ and Rust (`rustup`).

@@ -63,6 +63,7 @@ Il file [`.github/workflows/build.yml`](.github/workflows/build.yml) compila su 
 
 - **macOS:** file `.dmg` (non firmato)
 - **iOS:** app per il simulatore (`little-prince-ios-simulator.zip`)
+- **Web:** versione installabile da Safari, pubblicata su <https://fakefirmo.github.io/TravelApp/> (GitHub Pages, gratuito)
 
 Per scaricare i risultati: pagina _Actions_ del repository → ultima esecuzione → _Artifacts_, oppure:
 
