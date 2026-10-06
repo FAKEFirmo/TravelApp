@@ -1,5 +1,5 @@
 // Persistence: the library JSON + photo files, via the Rust commands in src-tauri/src/lib.rs.
-// Outside Tauri (plain browser preview) it falls back to localStorage + in-memory photos.
+// Outside Tauri (web / home-screen app) it uses localStorage for the library and IndexedDB for photos.
 import { invoke, convertFileSrc, isTauri } from '@tauri-apps/api/core';
 import { sep } from '@tauri-apps/api/path';
 import type { Library } from './model';
@@ -7,7 +7,26 @@ import type { Library } from './model';
 const KEY = 'little-prince-library';
 const tauri = isTauri();
 let photosDir = '';
-const memPhotos = new Map<string, string>(); // ponytail: browser preview only, lost on reload
+const urls = new Map<string, string>(); // web: photo file name → object URL
+
+// ---------- IndexedDB (web only): one object store of photo blobs keyed by file name ----------
+let dbp: Promise<IDBDatabase> | null = null;
+const db = () => dbp ??= new Promise((ok, fail) => {
+  const r = indexedDB.open('little-prince', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('photos');
+  r.onsuccess = () => ok(r.result); r.onerror = () => fail(r.error);
+});
+async function idb<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T> | void): Promise<T | undefined> {
+  const tx = (await db()).transaction('photos', mode), req = fn(tx.objectStore('photos'));
+  return new Promise((ok, fail) => { tx.oncomplete = () => ok(req?.result); tx.onerror = tx.onabort = () => fail(tx.error); });
+}
+async function webUrl(name: string) {
+  if (!urls.has(name)) {
+    const blob = await idb<Blob>('readonly', s => s.get(name));
+    if (blob) urls.set(name, URL.createObjectURL(blob));
+  }
+  return urls.get(name) ?? '';
+}
 
 export async function load(): Promise<Library> {
   if (tauri) photosDir = await invoke<string>('photos_dir');
@@ -15,6 +34,11 @@ export async function load(): Promise<Library> {
   if (!text) return { version: 1, trips: [] };
   const lib = JSON.parse(text) as Library; // throws on a corrupt file: the caller must not save over it
   if (lib.version !== 1) throw new Error(`Unsupported library version ${lib.version}`);
+  if (!tauri) {
+    navigator.storage?.persist?.(); // ask the browser not to evict our data
+    // Thumbnails are needed synchronously while rendering, so load them up front; full photos load on demand
+    await Promise.all(lib.trips.flatMap(t => t.activities.flatMap(a => a.photos.map(id => webUrl(`${id}.thumb.jpg`)))));
+  }
   return lib;
 }
 
@@ -42,17 +66,21 @@ export async function addPhoto(file: File) {
   img.close();
   for (const [name, blob] of files) {
     if (tauri) await invoke('save_photo', new Uint8Array(await blob.arrayBuffer()), { headers: { name } });
-    else memPhotos.set(name, URL.createObjectURL(blob));
+    else { await idb('readwrite', s => { s.put(blob, name); }); urls.set(name, URL.createObjectURL(blob)); }
   }
   return id;
 }
 
 export async function deletePhoto(id: string) {
   for (const name of [`${id}.jpg`, `${id}.thumb.jpg`])
-    tauri ? await invoke('delete_photo', { name }) : memPhotos.delete(name);
+    if (tauri) await invoke('delete_photo', { name });
+    else { await idb('readwrite', s => { s.delete(name); }); URL.revokeObjectURL(urls.get(name) ?? ''); urls.delete(name); }
 }
 
+/** Thumbnail URL, available synchronously (preloaded on the web) */
 export const photoUrl = (id: string, thumb = false) => {
   const name = `${id}${thumb ? '.thumb' : ''}.jpg`;
-  return tauri ? convertFileSrc(photosDir + sep() + name) : memPhotos.get(name) ?? '';
+  return tauri ? convertFileSrc(photosDir + sep() + name) : urls.get(name) ?? '';
 };
+/** Full-size photo URL (loaded from IndexedDB on demand on the web) */
+export const fullPhotoUrl = (id: string) => tauri ? Promise.resolve(photoUrl(id)) : webUrl(`${id}.jpg`);

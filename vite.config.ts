@@ -9,6 +9,8 @@ export default defineConfig(() => ({
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
+  // Relative paths: the same build works in Tauri and under any folder on a web host (GitHub Pages)
+  base: './',
   clearScreen: false,
   build: { chunkSizeWarningLimit: 2500 }, // three.js; loaded from disk, so size is fine
   // 2. tauri expects a fixed port, fail if that port is not available

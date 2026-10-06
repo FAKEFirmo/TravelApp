@@ -30,3 +30,8 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
+
+# Debug builds (`tauri dev`, simulator test builds): optimise dependencies so asset serving and the webview
+# start fast, while our own crate still compiles quickly.
+[profile.dev.package."*"]
+opt-level = 2

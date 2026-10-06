@@ -4,8 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Little Prince</title>
-  <link rel="stylesheet" href="/src/styles.css" />
-  <script type="module" src="/src/main.ts"></script>
+  <meta name="theme-color" content="#0b1026" />
+  <!-- Home-screen app (web version) -->
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Little Prince" />
+  <link rel="stylesheet" href="./src/styles.css" />
+  <script type="module" src="./src/main.ts"></script>
 </head>
 <body>
   <canvas id="stars"></canvas>

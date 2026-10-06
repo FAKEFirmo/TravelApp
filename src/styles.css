@@ -2,11 +2,11 @@
   /* Notch / home-bar / rounded-corner insets on iOS (0 elsewhere) */
   --st: max(16px, env(safe-area-inset-top)); --sb: max(16px, env(safe-area-inset-bottom));
   --sl: max(16px, env(safe-area-inset-left)); --sr: max(16px, env(safe-area-inset-right));
-  --sky: #0b1026; --panel: rgba(16, 22, 48, .82); --line: rgba(255,255,255,.08);
+  --sky: #0b1026; --panel: rgba(16, 22, 48, .96); /* opaque: a blur over the live globe costs a full re-render every frame */ --line: rgba(255,255,255,.08);
   --text: #eef1ff; --muted: #9aa3c7; --gold: #ffd166;
 }
 * { box-sizing: border-box; }
-html, body { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
+html, body { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none;
    margin: 0; height: 100%; background: var(--sky); color: var(--text);
   font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
 #stars, #globe { position: fixed; inset: 0; }
@@ -14,7 +14,7 @@ svg.lucide { width: 16px; height: 16px; vertical-align: -3px; stroke-width: 1.75
 .modes { display: flex; gap: 6px; color: var(--muted); }
 button svg.lucide { margin-right: 6px; }
 aside { position: fixed; top: var(--st); left: var(--sl); bottom: var(--sb); width: 340px; display: flex; flex-direction: column;
-  background: var(--panel); backdrop-filter: blur(14px); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
+  background: var(--panel); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; }
 header { padding: 18px 18px 12px; border-bottom: 1px solid var(--line); }
 h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
 h1 span { color: var(--gold); }
@@ -100,7 +100,7 @@ aside.detail > header, aside.detail > footer { display: none; }
 .ph em { align-self: center; font-style: normal; font-size: 11px; color: var(--muted); margin-left: 2px; }
 dialog { width: min(480px, calc(100vw - 32px)); max-height: 86vh; padding: 0; color: var(--text); background: #121935;
   border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
-dialog::backdrop { background: rgba(5,8,20,.55); backdrop-filter: blur(3px); }
+dialog::backdrop { background: rgba(5,8,20,.7); }
 dialog form { display: flex; flex-direction: column; gap: 12px; padding: 18px; }
 dialog h3 { margin: 0; font-size: 17px; }
 dialog h3 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 4px; }
@@ -186,7 +186,7 @@ select { font: inherit; color: var(--text); background: rgba(255,255,255,.06); b
   .list { padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
   .fab, .layers { display: grid; place-items: center; }
   .layers { position: fixed; top: var(--st); right: var(--sr); width: 40px; height: 40px; padding: 0; border-radius: 12px;
-    background: var(--panel); backdrop-filter: blur(14px); }
+    background: var(--panel); }
   footer, .views, .legend, .hint { display: none; }
   /* Forms become full-screen sheets with Cancel / Save on top */
   dialog:not(#lightbox):not(#ask) { width: 100%; max-width: none; height: calc(100% - env(safe-area-inset-top) - 12px);

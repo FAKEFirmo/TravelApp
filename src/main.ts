@@ -1,10 +1,12 @@
 // App shell: state, side panel, forms. Globe drawing lives in globe.ts, storage in store.ts.
 import placesUrl from './data/places.json?url';
+import satelliteUrl from './assets/earth-blue-marble.jpg';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   MODES, KINDS, AIRLINES, AIRCRAFT, CLASSES, view, cityOf,
   type Aircraft, type Activity, type Kind, type Leg, type LegView, type Library, type Mode, type Place, type Stop, type Trip, type TripView,
 } from './model';
-import { load, save, addPhoto, deletePhoto, photoUrl } from './store';
+import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl } from './store';
 import { createGlobe } from './globe';
 import { icon, esc, fmt, dfmt, hm, ask, enableSwipe } from './ui';
 
@@ -220,7 +222,8 @@ let gallery: { id: string; a: Activity }[] = [], gi = 0, swipeX: number | null =
 function showPhoto(i: number) {
   gi = (i + gallery.length) % gallery.length;
   const { id, a } = gallery[gi];
-  lightbox.querySelector('img')!.src = photoUrl(id);
+  const img = lightbox.querySelector('img')!, i0 = gi;
+  fullPhotoUrl(id).then(url => { if (gi === i0) img.src = url; });
   lightbox.querySelector('.cap')!.textContent = `${a.title} · ${dfmt(a.date)}${gallery.length > 1 ? ` · ${gi + 1}/${gallery.length}` : ''}`;
 }
 function openGallery(id: string) {
@@ -312,6 +315,9 @@ let index: { p: Place; n: string }[] = [];
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const label = (p: Place) => p.name + (p.iata ? ` (${p.iata})` : '');
 
+// Loaded on first use (only the trip form needs it), so it doesn't slow down startup
+let catalog: Promise<void> | null = null;
+const ensureCatalog = () => catalog ??= loadCatalog().catch(e => { catalog = null; showError(`Could not load the place catalog: ${e}`); });
 async function loadCatalog() {
   const rows: [string, string, string, number, number, number, string, string][] = await (await fetch(placesUrl)).json();
   const byId = new Map(rows.map(([id, name, country, lat, lng, , iata]) => [id, { id, name, country, lat, lng, ...(iata && { iata }) } as Place]));
@@ -416,6 +422,7 @@ legRows.addEventListener('click', e => {
 $('#addLeg').onclick = () => addLeg();
 
 function openTrip(trip?: Trip) {
+  ensureCatalog();
   editing = trip ?? null;
   tripForm.querySelector('form')!.reset();
   $('#tripTitle').textContent = trip ? 'Edit trip' : 'New trip';
@@ -549,6 +556,11 @@ function stars() {
 stars(); addEventListener('resize', stars);
 
 // ---------- Start ----------
+// Web / home-screen version: work offline and keep the big lazy assets cached
+if (!isTauri() && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(() =>
+    (window.requestIdleCallback ?? setTimeout)(() => { fetch(satelliteUrl); fetch(placesUrl); }), console.error);
+}
 try {
   lib = await load();
   canSave = true;
@@ -557,4 +569,5 @@ try {
 }
 for (const t of lib.trips) for (const l of t.legs) for (const p of [l.from, l.to]) { known.set(p.id, p); if (p.city) known.set(p.city.id, p.city); }
 rebuild(); render(); globe.refresh(); sheet('collapsed');
-loadCatalog().catch(e => showError(`Could not load the place catalog: ${e}`));
+// Warm the catalog once the app is idle, so the first search is instant
+(window.requestIdleCallback ?? setTimeout)(() => ensureCatalog());

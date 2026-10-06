@@ -1,8 +1,9 @@
 // The 3D globe: countries, trip arcs, stop + activity markers, camera moves.
 import Globe from 'globe.gl';
-import { feature } from 'topojson-client';
+import { TextureLoader, SRGBColorSpace } from 'three';
 import worldUrl from 'world-atlas/countries-50m.json?url';
 import satelliteUrl from './assets/earth-blue-marble.jpg';
+import { countryFeatures } from './world';
 import { MODES, KINDS, km, type Activity, type LegView, type Place, type TripView } from './model';
 import { icon, esc, rgba, fmt } from './ui';
 
@@ -34,7 +35,7 @@ export function centre(points: { lat: number; lng: number }[], min = 0.35) {
 type Mark = { lat: number; lng: number; p?: Place; label?: boolean; a?: Activity; more?: number };
 
 export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeEvents) {
-  let hovered: object | null = null, sat = false, lastAlt = 2.4;
+  let hovered: object | null = null, sat = false, lastAlt = 2.4, satTex: any = null;
   const s = state;
   const capColor = (f: any) => {
     if (sat) return f === hovered ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,0)';
@@ -83,7 +84,7 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       }
       return el;
     })
-    .onZoom(({ altitude }) => scale(altitude));
+    .onZoom(({ altitude }: { altitude: number }) => scale(altitude));
 
   const mat = globe.globeMaterial() as any;
   const paint = () => {
@@ -91,13 +92,18 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
     mat.emissiveIntensity = 0.6; mat.shininess = 6;
   };
   paint();
-  globe.controls().autoRotateSpeed = 0.35;
+  const controls = globe.controls() as any;
+  controls.autoRotateSpeed = 0.35;
+  // Zoom limits in globe units (radius 100): not closer than the 1:50m data stays sharp, not farther than a small globe
+  controls.minDistance = 106; controls.maxDistance = 520;
+  // Phones are 3x: rendering at 2x looks the same and halves the GPU work
+  globe.renderer().setPixelRatio(Math.min(devicePixelRatio, 2));
 
   const fit = () => globe.width(innerWidth).height(innerHeight);
   addEventListener('resize', fit); fit();
 
   fetch(worldUrl).then(r => r.json())
-    .then((w: any) => globe.polygonsData((feature(w, w.objects.countries) as any).features));
+    .then((w: any) => globe.polygonsData(countryFeatures(w)));
 
   // Keep arcs a near-constant screen width and declutter markers for the current zoom
   function scale(alt: number, force = false) {
@@ -143,8 +149,11 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
     offset(y: number) { globe.globeOffset([0, y]); },
     satellite(on: boolean) {
       sat = on;
-      globe.globeImageUrl(on ? satelliteUrl : null as any)
-        .polygonCapColor(capColor)
+      // Load the texture once and swap it in/out ourselves: globeImageUrl's async load could land after
+      // switching back to stylized and tint the ocean almost black
+      satTex ??= new TextureLoader().load(satelliteUrl, (t: any) => { t.colorSpace = SRGBColorSpace; mat.needsUpdate = true; });
+      mat.map = on ? satTex : null; mat.needsUpdate = true;
+      globe.polygonCapColor(capColor)
         .polygonStrokeColor(() => on ? 'rgba(255,255,255,.12)' : STYLE.border)
         .pathsData(on ? [] : GRID);
       paint();

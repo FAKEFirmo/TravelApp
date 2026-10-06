@@ -9,12 +9,13 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "node --experimental-strip-types --no-warnings src/model.test.ts",
-    "places": "node scripts/build-places.mjs"
+    "places": "node --experimental-strip-types --no-warnings scripts/build-places.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
     "globe.gl": "^2.46.2",
     "lucide": "^1.52.0",
+    "three": "0.186.1",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
   },

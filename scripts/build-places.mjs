@@ -1,17 +1,17 @@
 // Builds src/data/places.json, the offline place catalog (cities + airports).
 // Sources (public domain): OurAirports, Natural Earth populated places.
 // Country names come from the same world-atlas polygons the globe highlights, so they always match.
-// Run: node scripts/build-places.mjs
+// Run: npm run places
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { feature } from 'topojson-client';
 import { geoContains, geoDistance } from 'd3-geo';
+import { countryFeatures, isCrimea } from '../src/world.ts';
 
 const AIRPORTS = 'https://davidmegginson.github.io/ourairports-data/airports.csv';
 const CITIES = 'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_populated_places_simple.geojson';
 
 const world = createRequire(import.meta.url)('world-atlas/countries-50m.json');
-const countries = feature(world, world.objects.countries).features;
+const countries = countryFeatures(world);
 const km = (a, b) => geoDistance([a.lng, a.lat], [b.lng, b.lat]) * 6371;
 const round = n => Math.round(n * 1e4) / 1e4;
 
@@ -22,7 +22,9 @@ const parseCsv = text => {
   return rows.map(r => Object.fromEntries(head.map((h, i) => [h, r[i]])));
 };
 
-const countryAt = (p, fallback) => countries.find(c => geoContains(c, [p.lng, p.lat]))?.properties.name ?? fallback;
+// Points just off the simplified coastline fall back to Natural Earth's own field, which has the same Crimea issue
+const countryAt = (p, fallback) => countries.find(c => geoContains(c, [p.lng, p.lat]))?.properties.name ??
+  (isCrimea(p.lng, p.lat) ? 'Ukraine' : fallback);
 
 const ne = await (await fetch(CITIES)).json();
 const cities = ne.features.map(f => {
