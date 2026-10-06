@@ -1,0 +1,56 @@
+# Builds run on GitHub's machines, so release/iOS tooling (Xcode project generation, CocoaPods, …) never has to be
+# installed locally. Download results from the run's "Artifacts" section, or: gh run download -R FAKEFirmo/TravelApp
+name: Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - run: npm ci
+      - run: npm test
+      - run: cargo test
+        working-directory: src-tauri
+      # ponytail: unsigned build; add Apple signing secrets when distributing outside this Mac
+      - run: npx tauri build --bundles dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: little-prince-macos
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+
+  ios-simulator:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: aarch64-apple-ios-sim }
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - run: npm ci
+      - run: command -v xcodegen || brew install xcodegen
+      # ponytail: the Xcode project is generated fresh each run; commit src-tauri/gen/apple once it needs custom settings
+      - run: npx tauri ios init --ci
+      - run: npx tauri icon src-tauri/icons/app-icon-ios.png
+      - run: npx tauri ios build --debug --target aarch64-sim --ci
+      - name: Collect simulator app
+        run: |
+          app=$(find src-tauri/gen/apple/build -name "*.app" -type d -path "*sim*" | head -1)
+          echo "Found: $app"
+          test -n "$app"
+          ditto -c -k --keepParent "$app" little-prince-ios-simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: little-prince-ios-simulator
+          path: little-prince-ios-simulator.zip
