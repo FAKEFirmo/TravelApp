@@ -253,8 +253,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .check input { width: auto; }
 #bkSummary { margin: 4px 0; font-size: 13px; }
-.mac-only { display: none; }
-@media (pointer: fine) { .mac-only { display: inline; } }
+.desk-only { display: none; }
+@media (pointer: fine) { .desk-only { display: inline; } }
 
 /* Pull-up-and-hold indicator below the trip list (opens the backup page) */
 .pull { position: absolute; left: 50%; z-index: 2; width: 52px; height: 52px; opacity: 0; pointer-events: none;

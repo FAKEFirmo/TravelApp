@@ -6,6 +6,7 @@ import type { Library } from './model';
 
 const KEY = 'little-prince-library';
 const tauri = isTauri();
+export const android = /Android/i.test(navigator.userAgent);
 let photosDir = '';
 const urls = new Map<string, string>(); // web: photo file name → object URL
 
@@ -86,6 +87,14 @@ export async function readPhotoFile(name: string): Promise<Blob | undefined> {
  * Returns a short description of where it went.
  */
 export async function saveFile(name: string, blob: Blob): Promise<string> {
+  if (tauri && android) {
+    // Android apps can't drop files into Downloads: let the user pick where, via the system picker
+    const { save } = await import('@tauri-apps/plugin-dialog'), { writeFile } = await import('@tauri-apps/plugin-fs');
+    const path = await save({ defaultPath: name, filters: [{ name: 'Little Prince backup', extensions: ['json'] }] });
+    if (!path) throw Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    await writeFile(path, new Uint8Array(await blob.arrayBuffer()));
+    return 'the place you picked';
+  }
   if (tauri) return invoke<string>('export_backup', new Uint8Array(await blob.arrayBuffer()), { headers: { name } });
   const file = new File([blob], name, { type: blob.type });
   if (navigator.canShare?.({ files: [file] })) {

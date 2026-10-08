@@ -121,6 +121,9 @@ fn photos_dir(app: AppHandle) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Android: backups are saved through the system "Save to…" picker (dialog) and written there (fs)
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![load_library, save_library, save_photo, delete_photo, read_photo, export_backup, write_widget, photos_dir])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

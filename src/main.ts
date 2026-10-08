@@ -6,7 +6,7 @@ import {
   MODES, KINDS, AIRLINES, AIRCRAFT, CLASSES, view, cityOf, cityKey,
   type Aircraft, type Activity, type Kind, type Leg, type LegView, type Library, type Mode, type Place, type Stop, type Trip, type TripView,
 } from './model';
-import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl, saveFile, updateWidget } from './store';
+import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl, saveFile, updateWidget, android } from './store';
 import { createGlobe } from './globe';
 import { icon, esc, fmt, dfmt, hm, ask, enableSwipe, validate, toast } from './ui';
 import { exportBackup, readBackup, restoreBackup, deletePhotos, summary, backupName } from './backup';
@@ -64,6 +64,7 @@ async function commit() {
 const showError = (msg: string) => toast(msg, 'err', 8000);
 
 function select(t: TripView | null) {
+  if (t && t !== current) navMark();
   if (t !== current) detail = false;
   current = t; focused = null; tab = 'timeline';
   if (t) sheet('half');
@@ -205,7 +206,7 @@ list.addEventListener('click', async e => {
   if ((el = q('[data-edit-act]'))) return openAct(current!.stops.find(s => s.acts.some(a => a.id === el!.dataset.editAct))!, findAct(el.dataset.editAct!));
   if ((el = q('[data-photo]'))) return openGallery(el.dataset.photo!);
   if ((el = q('[data-add]'))) return openAct(current!.stops[+el.dataset.add!]);
-  if (q('[data-open]')) { detail = true; sheet('full'); render(); return globe.refresh(true); }
+  if (q('[data-open]')) { navMark(); detail = true; sheet('full'); render(); return globe.refresh(true); }
   if ((el = q('[data-tab]'))) { tab = el.dataset.tab as typeof tab; return render(); }
   if (q('[data-back]')) return back();
   if ((el = q('[data-act]'))) return fly([findAct(el.dataset.act!)], null, 0.07);
@@ -770,6 +771,25 @@ document.querySelectorAll('form').forEach(f => {
   // Return/Go on a keyboard submits without a button: it would close the dialog and lose the input
   f.addEventListener('submit', e => { if (!e.submitter) e.preventDefault(); });
 });
+
+// Shortcut label for this keyboard (⌘ on Mac, Ctrl elsewhere)
+const mac = /Mac/i.test(navigator.platform);
+document.querySelectorAll('.kbd').forEach(el => el.textContent = mac ? '⌘B' : 'Ctrl+B');
+
+// ---------- Android Back button ----------
+// Back walks back through what's open (a form or photo, then the trip page, then the selected trip) instead of
+// quitting: every one of those adds a history entry, and Back pops it.
+function navMark() { if (android) history.pushState({ lp: 1 }, ''); }
+if (android) {
+  for (const d of document.querySelectorAll('dialog'))
+    new MutationObserver(() => { if (d.open) navMark(); }).observe(d, { attributes: true, attributeFilter: ['open'] });
+  addEventListener('popstate', () => {
+    const open = [...document.querySelectorAll<HTMLDialogElement>('dialog[open]')].pop();
+    if (open) open.close();
+    else if (detail) back();
+    else if (current) select(null);
+  });
+}
 
 // ---------- Start ----------
 // Web / home-screen version: work offline and keep the big lazy assets cached
