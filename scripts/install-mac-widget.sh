@@ -18,12 +18,13 @@ echo "Signing as team $TEAM, shared folder $GROUP"
 LP_APP_GROUP="$GROUP" npx tauri build --bundles app
 APP="src-tauri/target/release/bundle/macos/Little Prince.app"
 
-# 2. The widget extension, built by Xcode (widget/LittlePrinceWidget.xcodeproj) and signed with your team.
+# 2. The widget extension, built by Xcode (a fresh build number each time: macOS caches a widget's sizes per build) (widget/LittlePrinceWidget.xcodeproj) and signed with your team.
 #    Xcode's working files go to a temp folder: its build database doesn't like this project's path.
 node --experimental-strip-types --no-warnings widget/world.mjs > widget/world.json
 XCB="$(mktemp -d)"
 xcodebuild -quiet -project widget/LittlePrinceWidget.xcodeproj -target LittlePrinceWidget -configuration Release \
   ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES DEVELOPMENT_TEAM="$TEAM" LP_APP_GROUP="$GROUP" MARKETING_VERSION="$VERSION" \
+  CURRENT_PROJECT_VERSION="$(date +%s)" \
   SYMROOT="$XCB/build" OBJROOT="$XCB/obj" -allowProvisioningUpdates build
 APPEX="$XCB/build/Release/LittlePrinceWidget.appex"
 OUT="src-tauri/target/widget" && mkdir -p "$OUT"
