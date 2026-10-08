@@ -18,21 +18,20 @@ echo "Signing as team $TEAM, shared folder $GROUP"
 LP_APP_GROUP="$GROUP" npx tauri build --bundles app
 APP="src-tauri/target/release/bundle/macos/Little Prince.app"
 
-# 2. The widget extension
-OUT="src-tauri/target/widget"
-APPEX="$OUT/LittlePrinceWidget.appex"
-rm -rf "$OUT" && mkdir -p "$APPEX/Contents/MacOS" "$APPEX/Contents/Resources"
-xcrun swiftc -sdk "$(xcrun --show-sdk-path --sdk macosx)" -target "$(uname -m)-apple-macos14.0" -swift-version 5 \
-  -parse-as-library -application-extension -O widget/LittlePrinceWidget.swift -o "$APPEX/Contents/MacOS/LittlePrinceWidget"
-node --experimental-strip-types --no-warnings widget/world.mjs > "$APPEX/Contents/Resources/world.json"
-sed -e "s/__GROUP__/$GROUP/" -e "s/__VERSION__/$VERSION/" widget/Info.plist > "$APPEX/Contents/Info.plist"
-sed "s/__GROUP__/$GROUP/" widget/widget.entitlements > "$OUT/widget.entitlements"
+# 2. The widget extension, built by Xcode (widget/LittlePrinceWidget.xcodeproj) and signed with your team.
+#    Xcode's working files go to a temp folder: its build database doesn't like this project's path.
+node --experimental-strip-types --no-warnings widget/world.mjs > widget/world.json
+XCB="$(mktemp -d)"
+xcodebuild -quiet -project widget/LittlePrinceWidget.xcodeproj -target LittlePrinceWidget -configuration Release \
+  ARCHS="$(uname -m)" ONLY_ACTIVE_ARCH=YES DEVELOPMENT_TEAM="$TEAM" LP_APP_GROUP="$GROUP" MARKETING_VERSION="$VERSION" \
+  SYMROOT="$XCB/build" OBJROOT="$XCB/obj" -allowProvisioningUpdates build
+APPEX="$XCB/build/Release/LittlePrinceWidget.appex"
+OUT="src-tauri/target/widget" && mkdir -p "$OUT"
 sed "s/__GROUP__/$GROUP/" widget/app.entitlements > "$OUT/app.entitlements"
 
 # 3. Embed and sign (inside out: widget first, then the app that contains it)
 mkdir -p "$APP/Contents/PlugIns" && rm -rf "$APP/Contents/PlugIns/LittlePrinceWidget.appex"
-cp -R "$APPEX" "$APP/Contents/PlugIns/"
-codesign --force --sign "$IDENTITY" --entitlements "$OUT/widget.entitlements" "$APP/Contents/PlugIns/LittlePrinceWidget.appex"
+cp -R "$APPEX" "$APP/Contents/PlugIns/" && rm -rf "$XCB"   # keeps Xcode's own signature
 codesign --force --sign "$IDENTITY" --entitlements "$OUT/app.entitlements" "$APP"
 codesign --verify --deep --strict "$APP"
 
@@ -42,6 +41,10 @@ pkill -f "Little Prince.app/Contents/MacOS/little-prince" 2>/dev/null || true
 cp -R "$APP" /Applications/
 open "/Applications/Little Prince.app"
 sleep 3
+# The widget gallery caches what it found; restart its services so the new/updated widget is picked up
+pluginkit -a "/Applications/Little Prince.app/Contents/PlugIns/LittlePrinceWidget.appex" 2>/dev/null || true
+killall chronod NotificationCenter 2>/dev/null || true
+sleep 2
 pluginkit -m -p com.apple.widgetkit-extension | grep -q com.littleprince.app.widget \
   && echo "Done. Add it: right-click the desktop → Edit Widgets → search \"Little Prince\"." \
   || echo "Installed; if the widget isn't listed yet, log out and back in once."

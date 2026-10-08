@@ -19,7 +19,7 @@ A "Travel globe" desktop widget: your visited countries, routes and totals on a 
 npm run widget   # builds the app with the widget, signs it, installs it in /Applications
 ```
 
-Then right-click the desktop → **Edit Widgets** → search "Little Prince". Code: `widget/`, `scripts/install-mac-widget.sh`.
+Then right-click the desktop → **Edit Widgets** → search "Little Prince". Code: `widget/` (a small Xcode widget-extension project) and `scripts/install-mac-widget.sh`.
 
 ## Develop
 

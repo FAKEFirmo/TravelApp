@@ -2,18 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleIdentifier</key><string>com.littleprince.app.widget</string>
-  <key>CFBundleExecutable</key><string>LittlePrinceWidget</string>
+  <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
   <key>CFBundleName</key><string>Little Prince Widget</string>
   <key>CFBundleDisplayName</key><string>Little Prince</string>
   <key>CFBundlePackageType</key><string>XPC!</string>
-  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
-  <key>CFBundleVersion</key><string>__VERSION__</string>
+  <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>CFBundleSupportedPlatforms</key><array><string>MacOSX</string></array>
+  <key>DTPlatformName</key><string>macosx</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>NSExtension</key>
   <dict><key>NSExtensionPointIdentifier</key><string>com.apple.widgetkit-extension</string></dict>
-  <!-- Shared folder the app writes widget.json into; filled in by scripts/install-mac-widget.sh -->
-  <key>LPAppGroup</key><string>__GROUP__</string>
+  <!-- Shared folder the app writes widget.json into; set by scripts/install-mac-widget.sh (LP_APP_GROUP build setting) -->
+  <key>LPAppGroup</key><string>$(LP_APP_GROUP)</string>
 </dict>
 </plist>

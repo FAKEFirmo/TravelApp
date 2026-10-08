@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>com.apple.security.app-sandbox</key><true/>
-  <key>com.apple.security.application-groups</key><array><string>__GROUP__</string></array>
+  <key>com.apple.security.application-groups</key><array><string>$(LP_APP_GROUP)</string></array>
 </dict>
 </plist>
