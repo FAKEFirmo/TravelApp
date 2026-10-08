@@ -7,6 +7,7 @@ export type Kind = 'museum' | 'sight' | 'beach' | 'ski' | 'hike' | 'food';
 export interface Place {
   id: string; name: string; country: string; lat: number; lng: number;
   iata?: string;
+  region?: string; // state / province, to tell same-named towns apart
   city?: Place; // airports point to their city, so stops group by city
 }
 export interface Leg {

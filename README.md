@@ -46,7 +46,7 @@ Back up that folder to back up everything, or use the in-app **Backup** page (pu
 
 ## Place catalog
 
-`src/data/places.json` is generated from [OurAirports](https://ourairports.com/data/) and [Natural Earth](https://www.naturalearthdata.com) populated places (both public domain). Each place's country comes from the same `world-atlas` polygons the globe draws. To regenerate it (needs internet):
+`src/data/places.json` is generated from [GeoNames](https://www.geonames.org) `cities5000` (about 64,000 places with 5,000+ inhabitants, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) and [OurAirports](https://ourairports.com/data/) (public domain). Each airport is linked to the city it serves, and each place's country comes from the same `world-atlas` polygons the globe draws. To regenerate it (needs internet and `unzip`):
 
 ```sh
 npm run places

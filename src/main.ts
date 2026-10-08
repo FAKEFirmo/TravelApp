@@ -368,7 +368,12 @@ async function deleteAct(a: Activity) {
 
 // ---------- Place catalog + search ----------
 const known = new Map<string, Place>(); // catalog + every place already used in the library
-let index: { p: Place; n: string }[] = [];
+// n: searchable name; alt: other-language names as "|cracow|krakau|"
+let index: { p: Place; n: string; alt: string }[] = [];
+const byIata = new Map<string, Place>();
+// First two letters of every word (any language) → index positions, in size order. A query only looks at the
+// places one of whose words starts like it, instead of scanning all ~67k.
+const byStart = new Map<string, number[]>();
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const label = (p: Place) => p.name + (p.iata ? ` (${p.iata})` : '');
 
@@ -376,24 +381,45 @@ const label = (p: Place) => p.name + (p.iata ? ` (${p.iata})` : '');
 let catalog: Promise<void> | null = null;
 const ensureCatalog = () => catalog ??= loadCatalog().catch(e => { catalog = null; showError(`Could not load the place catalog: ${e}`); });
 async function loadCatalog() {
-  const rows: [string, string, string, number, number, number, string, string][] = await (await fetch(placesUrl)).json();
-  const byId = new Map(rows.map(([id, name, country, lat, lng, , iata]) => [id, { id, name, country, lat, lng, ...(iata && { iata }) } as Place]));
+  const rows: [string, string, string, number, number, number, string, string, string, string][] = await (await fetch(placesUrl)).json();
+  const byId = new Map(rows.map(([id, name, country, lat, lng, , iata, , region]) =>
+    [id, { id, name, country, lat, lng, ...(iata && { iata }), ...(region && { region }) } as Place]));
   for (const [id, , , , , , , city] of rows) if (city) byId.get(id)!.city = byId.get(city);
-  const rank = new Map(rows.map(r => [r[0], r[5]]));
-  // Cities by population first, then airports (large before medium)
-  index = [...byId.values()].sort((a, b) => +!!a.iata - +!!b.iata || rank.get(b.id)! - rank.get(a.id)!).map(p => ({ p, n: norm(p.city && !p.name.includes(p.city.name) ? `${p.name} ${p.city.name}` : p.name) })); // "tokyo" finds Narita
-  for (const p of byId.values()) known.set(p.id, p);
+  const rank = new Map(rows.map(r => [r[0], r[5]])), alts = new Map(rows.map(r => [r[0], r[9]]));
+  // Cities by population first, then airports (large before medium): search scans in this order
+  index = [...byId.values()].sort((a, b) => +!!a.iata - +!!b.iata || rank.get(b.id)! - rank.get(a.id)!).map(p => ({
+    p,
+    n: norm(p.city && !p.name.includes(p.city.name) ? `${p.name} ${p.city.name}` : p.name), // "tokyo" finds Narita
+    alt: alts.get(p.id) ? `|${norm(alts.get(p.id)!)}|` : '',
+  }));
+  index.forEach((e, i) => {
+    for (const k of new Set(`${e.n} ${e.alt}`.split(/[\s|'’-]+/).filter(w => w.length > 1).map(w => w.slice(0, 2)))) {
+      const list = byStart.get(k);
+      if (list) list.push(i); else byStart.set(k, [i]);
+    }
+  });
+  for (const p of byId.values()) { known.set(p.id, p); if (p.iata) byIata.set(p.iata.toLowerCase(), p); }
 }
 
+/**
+ * Best 8 places for a query, in this order: exact airport code; exact name in any language ("Roma" → Rome before
+ * Roman); name starts with it; another-language name starts with it ("Londr" → London); a later word starts with it
+ * ("york" → New York City). Bigger places first within each group. Candidates come from the first-two-letters
+ * table, already in size order, so the scan can stop once 8 names start with the query.
+ */
 function search(q: string) {
   const n = norm(q.trim());
   if (n.length < 2) return [];
-  const hits: [number, Place][] = [];
-  for (const { p, n: name } of index) {
-    const lvl = p.iata?.toLowerCase() === n ? 0 : name.startsWith(n) ? 1 : name.includes(' ' + n) ? 2 : name.includes(n) ? 3 : -1;
-    if (lvl >= 0) hits.push([lvl, p]);
+  const tiers: Place[][] = [[], [], [], []], LIMIT = 8;
+  for (const i of byStart.get(n.slice(0, 2)) ?? []) {
+    const e = index[i];
+    if (e.n === n || e.alt.includes(`|${n}|`)) tiers[0].push(e.p);
+    else if (e.n.startsWith(n)) { if (tiers[1].push(e.p) >= LIMIT) break; }
+    else if (tiers[2].length < LIMIT && e.alt.includes('|' + n)) tiers[2].push(e.p);
+    else if (tiers[3].length < LIMIT && (e.n.includes(' ' + n) || e.alt.includes(' ' + n))) tiers[3].push(e.p);
   }
-  return hits.sort((a, b) => a[0] - b[0]).slice(0, 8).map(h => h[1]); // stable sort keeps the rank order
+  const air = byIata.get(n);
+  return [...new Set([...(air ? [air] : []), ...tiers.flat()])].slice(0, LIMIT);
 }
 
 // One dropdown, shared by every place input in the trip form
@@ -417,7 +443,7 @@ function showSuggest(input: HTMLInputElement) {
   }
   if (!sugItems.length) { suggest.hidden = true; return; }
   suggest.innerHTML = sugItems.map((p, i) => `<li data-k="${i}" class="${i ? '' : 'on'}">${icon(p.iata ? 'Plane' : 'Map')}
-    <span>${esc(label(p))}</span><small>${esc(p.city && p.city.name !== p.name ? p.city.name : p.country)}</small></li>`).join('');
+    <span>${esc(label(p))}</span><small>${esc(p.city && p.city.name !== p.name ? p.city.name : [p.region, p.country].filter(Boolean).join(', '))}</small></li>`).join('');
   suggest.hidden = false;
 }
 suggest.addEventListener('pointerdown', e => {
