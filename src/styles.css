@@ -261,6 +261,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .pull svg { position: absolute; inset: 4px; transform: rotate(-90deg); }
 .pull circle { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 120; stroke-dashoffset: 120; }
 .pull.go circle { animation: fill-ring .75s linear forwards; }
+.pull.ready { background: var(--gold); color: #1b1b2f; animation: pop .25s ease-out; } /* full: release to open */
+@keyframes pop { 50% { scale: 1.15; } }
 @keyframes fill-ring { to { stroke-dashoffset: 0; } }
 .pull svg.lucide { position: static; transform: none; width: 20px; height: 20px; }
 .list { -webkit-touch-callout: none; overscroll-behavior: contain; }

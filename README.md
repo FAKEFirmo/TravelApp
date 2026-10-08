@@ -42,7 +42,7 @@ Stored in the app data folder (`~/Library/Application Support/com.littleprince.a
 - `library.json`: all trips. Saves are atomic, and the previous version is kept as `library.bak.json`.
 - `photos/`: each photo is stored at up to 2048 px, plus a 320 px thumbnail.
 
-Back up that folder to back up everything, or use the in-app **Backup** page (pull the trip list up past its end and hold, or ⌘B on Mac): it exports one `.json` file with all trips and photos, and imports it on any device (add to existing trips or replace them).
+Back up that folder to back up everything, or use the in-app **Backup** page (pull the trip list up past its end, hold until the ring fills, then let go; or ⌘B on Mac): it exports one `.json` file with all trips and photos, and imports it on any device (add to existing trips or replace them).
 
 ## Place catalog
 

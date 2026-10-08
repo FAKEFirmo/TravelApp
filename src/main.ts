@@ -219,13 +219,14 @@ addEventListener('keydown', e => {
 
 // ---------- Pull up past the end of the trip list and hold → backup page ----------
 // Hidden until you overscroll (like pull-to-refresh): the list stretches, an icon rises with a ring that fills
-// while you keep holding; full ring = open. Let go early and it springs back. Touch and mouse drag both work.
+// while you keep holding. A full ring only means "ready": the page opens when you let go there, so it can't open
+// by accident. Sliding back down or letting go early cancels. Touch and mouse drag both work.
 const pullEl = $('#pull');
 pullEl.querySelector('span')!.innerHTML = icon('Archive');
 let held = false; // swallow the click that ends a pull
 {
   const ARM = 64, MAX = 110, FILL = 750; // px of pull before the ring starts filling, rubber-band cap, ms to fill
-  let y0: number | null = null, pulling = false, armed = false, timer = 0;
+  let y0: number | null = null, pulling = false, armed = false, ready = false, timer = 0;
   const atBottom = () => list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
   const set = (pull: number) => {
     list.style.transform = pull ? `translateY(${-pull}px)` : '';
@@ -233,12 +234,16 @@ let held = false; // swallow the click that ends a pull
     pullEl.style.transform = `translateX(-50%) translateY(${Math.max(0, ARM - pull) * 0.4}px) scale(${0.6 + 0.4 * Math.min(1, pull / ARM)})`;
     if (pull >= ARM && !armed) {
       armed = true; pullEl.classList.add('go');
-      timer = setTimeout(() => { held = true; release(); navigator.vibrate?.(15); openBackup(); }, FILL);
-    } else if (pull < ARM && armed) { armed = false; clearTimeout(timer); pullEl.classList.remove('go'); }
+      timer = setTimeout(() => { ready = true; pullEl.classList.add('ready'); navigator.vibrate?.(15); }, FILL);
+    } else if (pull < ARM && armed) {
+      armed = ready = false; clearTimeout(timer); pullEl.classList.remove('go', 'ready');
+    }
   };
   const release = () => {
-    y0 = null; pulling = false; armed = false; clearTimeout(timer);
-    pullEl.classList.remove('go');
+    const open = ready; // only a release while the ring is full opens the page
+    y0 = null; pulling = false; armed = ready = false; clearTimeout(timer);
+    pullEl.classList.remove('go', 'ready');
+    if (open) { held = true; openBackup(); }
     list.classList.add('springback'); set(0);
     setTimeout(() => list.classList.remove('springback'), 250);
   };
