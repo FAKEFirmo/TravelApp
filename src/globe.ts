@@ -24,6 +24,7 @@ const GRID = [
 ];
 // Radii (globe radius 100) of the layers above the ocean sphere; gaps sized for the camera's near plane below
 const R = { grid: 100.1, land: 100.3, border: 100.4 };
+const MARK_ALT = 0.005; // dots and line ends sit just above land and borders (radius 100.5)
 const noRaycast = () => {}; // these layers never need picking: skipping them keeps pointer moves cheap
 
 /**
@@ -105,9 +106,11 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
     .arcEndLat((l: any) => l.to.lat).arcEndLng((l: any) => l.to.lng)
     .arcColor(arcColor)
     .arcAltitudeAutoScale(0.4)
+    // Start/end at the dots' height: on the bare surface the last bit of each line hid under the raised land
+    .arcStartAltitude(MARK_ALT).arcEndAltitude(MARK_ALT)
     .arcLabel((l: any) => `${icon(MODES[l.mode as keyof typeof MODES].icon)} <b>${esc(l.from.name)} → ${esc(l.to.name)}</b><br>${esc(l.trip.name)} · ${fmt(l.km)} km`)
     .onArcClick((l: any) => { const t = s().trips.find(t => t.trip === l.trip); if (t) on.trip(t); })
-    .htmlLat('lat').htmlLng('lng').htmlAltitude(0.005).htmlTransitionDuration(0)
+    .htmlLat('lat').htmlLng('lng').htmlAltitude(MARK_ALT).htmlTransitionDuration(0)
     .htmlElement((d: object) => {
       const m = d as Mark, el = document.createElement('div');
       if (m.a) {
