@@ -4,12 +4,14 @@ An offline travel journal on a 3D globe. Log trips as legs (flight, train, bus, 
 
 Everything stays on the device: no account, no network.
 
-Platforms: macOS first, then Android (Samsung), then Windows. Built with [Tauri 2](https://tauri.app), TypeScript and [globe.gl](https://globe.gl).
+Platforms: macOS, iOS, Android, Windows, and the web. Built with [Tauri 2](https://tauri.app), TypeScript and [globe.gl](https://globe.gl).
 
 ## Try it
 
 - **Web / iPhone, no App Store needed:** open <https://fakefirmo.github.io/TravelApp/> in Safari, then tap Share → **Add to Home Screen**. It runs full-screen and works offline. Trips and photos are stored only on that device.
 - **macOS:** download the `.dmg` from the latest [Build run](https://github.com/FAKEFirmo/TravelApp/actions/workflows/build.yml) → *Artifacts*. The app is unsigned, so the first time right-click it and choose **Open**.
+- **Windows:** download `little-prince-windows` from the same page and run the installer. It's unsigned, so Windows SmartScreen asks once: **More info → Run anyway**.
+- **Android:** download `little-prince-android` (an `.apk`), open it on the phone and allow installing from that source when asked.
 
 ## Mac widget (personal use)
 
