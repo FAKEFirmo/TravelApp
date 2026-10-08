@@ -241,3 +241,30 @@ select { font: inherit; color: var(--text); background: rgba(255,255,255,.06); b
 
 input, textarea { -webkit-user-select: text; user-select: text; }
 @media (pointer: coarse) { input, textarea, select { font-size: 16px; } } /* iOS zooms into fields under 16px */
+
+/* Form errors (we validate ourselves: iOS doesn't reliably show the browser's own bubbles) */
+.formerr { margin: 0; padding: 8px 10px; border-radius: 9px; background: rgba(201,76,90,.18); color: #ff9aa5; font-size: 13px; }
+.invalid { border-color: #ff8a96 !important; box-shadow: 0 0 0 1px #ff8a96; }
+.suggest li.wait { color: var(--muted); cursor: default; }
+
+/* Backup page */
+.bk { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.bk .m, .tip { margin: 0; color: var(--muted); font-size: 12px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.check input { width: auto; }
+#bkSummary { margin: 4px 0; font-size: 13px; }
+.mac-only { display: none; }
+@media (pointer: fine) { .mac-only { display: inline; } }
+
+/* Press-and-hold indicator (opens the backup page) */
+.hold { position: fixed; z-index: 30; width: 56px; height: 56px; margin: -28px 0 0 -28px; pointer-events: none;
+  border-radius: 50%; background: rgba(16,22,48,.92); display: grid; place-items: center; color: var(--gold); }
+.hold svg { position: absolute; inset: 6px; transform: rotate(-90deg); }
+.hold circle { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 120; stroke-dashoffset: 120; }
+.hold.go circle { animation: fill-ring .6s linear forwards; }
+@keyframes fill-ring { to { stroke-dashoffset: 0; } }
+.hold svg.lucide { position: static; transform: none; width: 20px; height: 20px; }
+.list { -webkit-touch-callout: none; }
+.list:not(.detail-list)::after { content: ''; display: block; height: 140px; } /* room to hold below the last trip */
+.toast { position: fixed; left: 50%; top: var(--st); transform: translateX(-50%); z-index: 40; max-width: calc(100vw - 32px);
+  padding: 10px 14px; border-radius: 10px; background: #1d3a2e; border: 1px solid #3f8a5a; font-size: 13px; }

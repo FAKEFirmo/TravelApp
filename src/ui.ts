@@ -1,13 +1,13 @@
 // Small UI helpers shared by the globe and the panel.
 import {
   createElement, Plane, TrainFront, Bus, Car, Ship, Landmark, Camera, TreePalm, MountainSnow, Footprints, UtensilsCrossed,
-  ArrowLeft, Plus, Globe, ChevronRight, ChevronLeft, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map, Layers,
+  ArrowLeft, Plus, Globe, ChevronRight, ChevronLeft, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map, Layers, Archive,
 } from 'lucide';
 
 // Only the icons we use, so the bundle stays small
 const ICONS = {
   Plane, TrainFront, Bus, Car, Ship, Landmark, Camera, TreePalm, MountainSnow, Footprints, UtensilsCrossed,
-  ArrowLeft, Plus, Globe, ChevronRight, ChevronLeft, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map, Layers,
+  ArrowLeft, Plus, Globe, ChevronRight, ChevronLeft, X, ImagePlus, Armchair, Trash2, Pencil, Ellipsis, Satellite, Map, Layers, Archive,
 };
 export const icon = (name: string) => {
   const el = createElement(ICONS[name as keyof typeof ICONS]);
@@ -29,9 +29,16 @@ export function ask(message: string, ok = 'Delete'): Promise<boolean> {
   const d = document.getElementById('ask') as HTMLDialogElement;
   d.querySelector('p')!.textContent = message;
   d.querySelector<HTMLButtonElement>('[value=ok]')!.textContent = ok;
-  d.returnValue = '';
   d.showModal();
-  return new Promise(res => d.addEventListener('close', () => res(d.returnValue === 'ok'), { once: true }));
+  // Resolve from the button press itself: the dialog's 'close' event is async and can be held back (e.g. in a
+  // background tab). Esc fires 'cancel'.
+  const form = d.querySelector('form')!;
+  return new Promise(res => {
+    const done = (ok: boolean) => { form.removeEventListener('submit', onSubmit); d.removeEventListener('cancel', onCancel); res(ok); };
+    const onSubmit = (e: SubmitEvent) => done((e.submitter as HTMLButtonElement | null)?.value === 'ok');
+    const onCancel = () => done(false);
+    form.addEventListener('submit', onSubmit); d.addEventListener('cancel', onCancel);
+  });
 }
 
 /**
@@ -73,4 +80,28 @@ export function enableSwipe(root: HTMLElement) {
   addEventListener('pointerup', end); addEventListener('pointercancel', end);
   // A drag must not also count as a click on the row
   root.addEventListener('click', e => { if (moved) { e.stopPropagation(); moved = false; } }, true);
+}
+
+/**
+ * Validate a form ourselves (forms use novalidate): outline bad fields, say what's wrong at the top,
+ * scroll to the first one. iOS doesn't reliably show the browser's own validation bubbles.
+ */
+export function validate(form: HTMLFormElement) {
+  form.querySelectorAll('.invalid').forEach(el => el.classList.remove('invalid'));
+  const bad = [...form.elements].filter(el => 'checkValidity' in el && !(el as HTMLInputElement).checkValidity()) as HTMLInputElement[];
+  const msg = form.querySelector<HTMLElement>('.formerr')!;
+  msg.hidden = !bad.length;
+  if (!bad.length) return true;
+  bad.forEach(el => el.classList.add('invalid'));
+  const el = bad[0];
+  const name = el.getAttribute('aria-label') || el.closest('label')?.firstChild?.textContent?.trim() || el.placeholder || 'This field';
+  msg.textContent = `${name}: ${el.validationMessage}${bad.length > 1 ? ` (and ${bad.length - 1} more)` : ''}`;
+  msg.scrollIntoView({ block: 'nearest' });
+  el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  return false;
+}
+
+export function toast(text: string) {
+  const el = Object.assign(document.createElement('div'), { className: 'toast', textContent: text });
+  document.body.append(el); setTimeout(() => el.remove(), 4000);
 }

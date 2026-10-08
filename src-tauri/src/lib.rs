@@ -1,7 +1,7 @@
 // Local storage for the app: one JSON library file plus a photos folder in the app data directory.
 use std::{fs, io::Write, path::PathBuf};
 use tauri::{
-    ipc::{InvokeBody, Request},
+    ipc::{InvokeBody, Request, Response},
     AppHandle, Manager,
 };
 
@@ -63,6 +63,34 @@ fn delete_photo(app: AppHandle, name: String) -> Result<(), String> {
     }
 }
 
+/// Raw bytes of one photo (used when exporting a backup).
+#[tauri::command]
+fn read_photo(app: AppHandle, name: String) -> Result<Response, String> {
+    fs::read(photo_path(&app, &name)?).map(Response::new).map_err(|e| e.to_string())
+}
+
+/// Writes a backup file where the user can find it: Downloads on desktop, the app's Documents folder on
+/// mobile (shown in the Files app). Raw bytes in the body, file name in the `name` header. Returns the path.
+#[tauri::command]
+fn export_backup(app: AppHandle, request: Request) -> Result<String, String> {
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected raw file bytes".into());
+    };
+    let name = request.headers().get("name").and_then(|v| v.to_str().ok()).ok_or("missing name")?;
+    if !valid_name(name) {
+        return Err(format!("invalid file name: {name}"));
+    }
+    #[cfg(desktop)]
+    let dir = app.path().download_dir();
+    #[cfg(mobile)]
+    let dir = app.path().document_dir();
+    let dir = dir.map_err(|e| e.to_string())?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(name);
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 fn photos_dir(app: AppHandle) -> Result<String, String> {
     Ok(data_dir(&app)?.join("photos").to_string_lossy().into_owned())
@@ -71,7 +99,7 @@ fn photos_dir(app: AppHandle) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![load_library, save_library, save_photo, delete_photo, photos_dir])
+        .invoke_handler(tauri::generate_handler![load_library, save_library, save_photo, delete_photo, read_photo, export_backup, photos_dir])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

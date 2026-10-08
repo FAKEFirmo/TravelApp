@@ -43,6 +43,12 @@ jobs:
       # ponytail: the Xcode project is generated fresh each run; commit src-tauri/gen/apple once it needs custom settings
       - run: npx tauri ios init --ci
       - run: npx tauri icon src-tauri/icons/app-icon-ios.png
+      # Exported backups go to the app's Documents folder: make it visible in the Files app
+      - name: Show app folder in Files
+        run: |
+          plist=$(find src-tauri/gen/apple -name Info.plist -path "*_iOS*" | head -1)
+          /usr/libexec/PlistBuddy -c "Add :UIFileSharingEnabled bool true" "$plist"
+          /usr/libexec/PlistBuddy -c "Add :LSSupportsOpeningDocumentsInPlace bool true" "$plist"
       - run: npx tauri ios build --debug --target aarch64-sim --ci
       - name: Collect simulator app
         run: |

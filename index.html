@@ -38,10 +38,11 @@
   </div>
   <button class="layers" id="layers" title="Map style"></button>
   <div class="legend" id="legend"></div>
-  <div class="hint">Click an arc, a dot or a trip · swipe a trip left to delete · Esc for overview</div>
+  <div class="hint">Click an arc, a dot or a trip · swipe a trip left to delete · Esc for overview · ⌘B backup</div>
 
   <dialog id="tripForm"><form method="dialog">
     <h3 id="tripTitle">New trip</h3>
+    <p class="formerr" role="alert" hidden></p>
     <label class="f">Name<input name="name" required maxlength="80" placeholder="Summer in Greece"></label>
     <div id="legRows"></div>
     <button type="button" class="add-leg" id="addLeg"></button>
@@ -51,6 +52,7 @@
 
   <dialog id="actForm"><form method="dialog">
     <h3><span id="actTitle">Add activity</span><small id="actStop"></small></h3>
+    <p class="formerr" role="alert" hidden></p>
     <div class="chips" id="kinds"></div>
     <label class="f">Title<input name="title" required maxlength="120" placeholder="Acropolis Museum"></label>
     <div class="row"><label class="f">Date<input name="date" type="date" required></label></div>
@@ -60,6 +62,30 @@
     <div class="thumbs" id="thumbs"></div>
     <div class="actions"><button value="cancel" formnovalidate>Cancel</button><button class="primary" value="save" id="actSave">Save</button></div>
   </form></dialog>
+
+  <dialog id="backup"><form method="dialog">
+    <h3>Backup</h3>
+    <p class="formerr" role="alert" hidden></p>
+    <section class="bk">
+      <b>Export</b>
+      <p class="m" id="bkInfo"></p>
+      <label class="check"><input type="checkbox" id="bkPhotos" checked> Include photos</label>
+      <button type="button" class="primary" id="bkExport">Export backup</button>
+    </section>
+    <section class="bk">
+      <b>Import</b>
+      <p class="m">Restore trips from a backup file made on any of your devices.</p>
+      <label class="drop"><span id="bkPick">Choose backup file…</span><input type="file" id="bkFile" accept=".json,application/json"></label>
+      <div id="bkPreview" hidden>
+        <p id="bkSummary"></p>
+        <div class="row"><button type="button" id="bkMerge">Add to my trips</button><button type="button" class="danger" id="bkReplace">Replace everything</button></div>
+      </div>
+    </section>
+    <p class="m tip">Open this anytime by holding the empty space below your trips<span class="mac-only">, or with ⌘B</span>.</p>
+    <div class="actions"><button value="cancel">Close</button></div>
+  </form></dialog>
+
+  <div class="hold" id="hold" hidden><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/></svg><span></span></div>
 
   <dialog id="ask"><form method="dialog">
     <p></p>

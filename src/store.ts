@@ -64,11 +64,37 @@ export async function addPhoto(file: File) {
   const img = await createImageBitmap(file); // applies EXIF rotation
   const files: [string, Blob][] = [[`${id}.jpg`, await jpeg(img, MAX, 0.88)], [`${id}.thumb.jpg`, await jpeg(img, THUMB, 0.8)]];
   img.close();
-  for (const [name, blob] of files) {
-    if (tauri) await invoke('save_photo', new Uint8Array(await blob.arrayBuffer()), { headers: { name } });
-    else { await idb('readwrite', s => { s.put(blob, name); }); urls.set(name, URL.createObjectURL(blob)); }
-  }
+  for (const [name, blob] of files) await writePhotoFile(name, blob);
   return id;
+}
+
+/** Store one photo file (`<id>.jpg` or `<id>.thumb.jpg`) */
+export async function writePhotoFile(name: string, blob: Blob) {
+  if (tauri) await invoke('save_photo', new Uint8Array(await blob.arrayBuffer()), { headers: { name } });
+  else { await idb('readwrite', s => { s.put(blob, name); }); urls.set(name, URL.createObjectURL(blob)); }
+}
+
+/** Read one photo file back (undefined if it's missing) */
+export async function readPhotoFile(name: string): Promise<Blob | undefined> {
+  if (!tauri) return idb<Blob>('readonly', s => s.get(name));
+  try { return new Blob([await invoke<ArrayBuffer>('read_photo', { name })], { type: 'image/jpeg' }); } catch { return undefined; }
+}
+
+/**
+ * Hand a finished file to the user. Native: written to Downloads (Mac) / the app's Files folder (iPhone).
+ * Web: the share sheet when available (iPhone: Save to Files, AirDrop…), otherwise a normal download.
+ * Returns a short description of where it went.
+ */
+export async function saveFile(name: string, blob: Blob): Promise<string> {
+  if (tauri) return invoke<string>('export_backup', new Uint8Array(await blob.arrayBuffer()), { headers: { name } });
+  const file = new File([blob], name, { type: blob.type });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return 'the place you picked'; }
+    catch (e) { if ((e as Error).name === 'AbortError') throw e; } // cancelled: stop; not allowed: fall back to a download
+  }
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+  return 'your Downloads';
 }
 
 export async function deletePhoto(id: string) {

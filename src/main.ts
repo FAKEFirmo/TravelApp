@@ -6,9 +6,10 @@ import {
   MODES, KINDS, AIRLINES, AIRCRAFT, CLASSES, view, cityOf,
   type Aircraft, type Activity, type Kind, type Leg, type LegView, type Library, type Mode, type Place, type Stop, type Trip, type TripView,
 } from './model';
-import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl } from './store';
+import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl, saveFile } from './store';
 import { createGlobe } from './globe';
-import { icon, esc, fmt, dfmt, hm, ask, enableSwipe } from './ui';
+import { icon, esc, fmt, dfmt, hm, ask, enableSwipe, validate, toast } from './ui';
+import { exportBackup, readBackup, restoreBackup, deletePhotos, summary, backupName } from './backup';
 
 const n = (k: number, one: string, many = one + 's') => `${k} ${k === 1 ? one : many}`;
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -202,7 +203,8 @@ list.addEventListener('click', async e => {
     return s.acts.length ? fly([s.place, ...s.acts], null, 0.1) : fly([s.place]);
   }
   if ((el = q('[data-i]'))) { const l = current!.legs[+el.dataset.i!]; return fly([l.from, l.to], l === focused ? null : l); }
-  if ((el = q('.trip'))) { const t = trips.find(t => t.trip.id === el!.dataset.id)!; select(t === current ? null : t); }
+  if ((el = q('.trip'))) { const t = trips.find(t => t.trip.id === el!.dataset.id)!; return select(t === current ? null : t); }
+  if (!detail && current && !held) select(null); // tap on empty space deselects
 });
 enableSwipe(list);
 
@@ -215,7 +217,32 @@ $<HTMLInputElement>('#search').addEventListener('input', e => {
 });
 addEventListener('keydown', e => {
   if (e.key === 'Escape' && !document.querySelector('dialog[open]')) detail ? back() : select(null);
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b' && !document.querySelector('dialog[open]')) { e.preventDefault(); openBackup(); }
 });
+
+// ---------- Press and hold the empty space below the trips → backup page ----------
+const holdEl = $('#hold');
+holdEl.querySelector('span')!.innerHTML = icon('Archive');
+let held = false;
+{
+  let timer = 0, show = 0, x0 = 0, y0 = 0;
+  const cancel = () => { clearTimeout(timer); clearTimeout(show); holdEl.hidden = true; holdEl.classList.remove('go'); };
+  list.addEventListener('pointerdown', e => {
+    held = false;
+    const t = e.target as Element;
+    if (detail || t.closest('.trip, button, input, a')) return;
+    x0 = e.clientX; y0 = e.clientY;
+    // Show the ring only after a moment, so ordinary taps don't flash it
+    show = setTimeout(() => {
+      Object.assign(holdEl.style, { left: x0 + 'px', top: y0 + 'px' });
+      holdEl.hidden = false; void holdEl.offsetWidth; holdEl.classList.add('go');
+    }, 150);
+    timer = setTimeout(() => { held = true; cancel(); openBackup(); }, 750);
+  });
+  list.addEventListener('pointermove', e => { if (Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) list.addEventListener(ev, cancel);
+  list.addEventListener('contextmenu', e => e.preventDefault()); // long press on Mac trackpads / Android
+}
 // ---------- Photo viewer: arrows, keys or swipe through the whole trip ----------
 const lightbox = $<HTMLDialogElement>('#lightbox');
 let gallery: { id: string; a: Activity }[] = [], gi = 0, swipeX: number | null = null, swiped = false;
@@ -351,9 +378,14 @@ function pick(input: HTMLInputElement, p: Place) {
 }
 function showSuggest(input: HTMLInputElement) {
   sugInput = input; sugItems = search(input.value); sugOn = 0;
-  if (!sugItems.length) { suggest.hidden = true; return; }
   const r = input.getBoundingClientRect();
   Object.assign(suggest.style, { left: r.left + 'px', top: r.bottom + 4 + 'px', width: Math.max(r.width, 260) + 'px' });
+  if (!index.length && input.value.trim().length > 1) { // catalog still loading: say so, then refresh
+    suggest.innerHTML = '<li class="wait">Loading places…</li>'; suggest.hidden = false;
+    ensureCatalog()?.then(() => { if (sugInput === input && document.activeElement === input) showSuggest(input); });
+    return;
+  }
+  if (!sugItems.length) { suggest.hidden = true; return; }
   suggest.innerHTML = sugItems.map((p, i) => `<li data-k="${i}" class="${i ? '' : 'on'}">${icon(p.iata ? 'Plane' : 'Map')}
     <span>${esc(label(p))}</span><small>${esc(p.city && p.city.name !== p.name ? p.city.name : p.country)}</small></li>`).join('');
   suggest.hidden = false;
@@ -376,9 +408,9 @@ function addLeg(leg?: Leg) {
     <div class="chips">${Object.entries(MODES).map(([k, m]) => `
       <label title="${m.label}"><input type="radio" name="mode${n}" value="${k}" ${k === (leg?.mode ?? 'flight') ? 'checked' : ''}>${icon(m.icon)}</label>`).join('')}
       <button type="button" class="rm" title="Remove leg">${icon('X')}</button></div>
-    <div class="row"><input name="from" placeholder="From" required autocomplete="off" data-place>
-      <input name="to" placeholder="To" required autocomplete="off" data-place></div>
-    <div class="row"><input name="date" type="date" required><input name="info" maxlength="40" placeholder="Flight no., operator… (optional)"></div>
+    <div class="row"><input name="from" placeholder="From" aria-label="Leg ${legRows.children.length + 1} from" required autocomplete="off" data-place>
+      <input name="to" placeholder="To" aria-label="Leg ${legRows.children.length + 1} to" required autocomplete="off" data-place></div>
+    <div class="row"><input name="date" type="date" aria-label="Leg ${legRows.children.length + 1} date" required><input name="info" maxlength="40" placeholder="Flight no., operator… (optional)"></div>
     <div class="row fl"><input name="aircraft" list="aircraftList" placeholder="Aircraft (optional)" autocomplete="off" style="flex:2">
       <input name="seat" maxlength="6" placeholder="Seat" style="flex:1"></div>
     <div class="row fl"><select name="cls" style="flex:1">${CLASSES.map(c => `<option>${c}</option>`).join('')}</select></div>
@@ -399,7 +431,7 @@ legRows.addEventListener('input', e => {
   const t = e.target as HTMLInputElement;
   if (t.dataset.place === undefined) return;
   delete t.dataset.id;
-  t.setCustomValidity('Pick a place from the list');
+  t.setCustomValidity('Pick a place from the suggestions');
   showSuggest(t);
 });
 legRows.addEventListener('keydown', e => {
@@ -412,9 +444,16 @@ legRows.addEventListener('keydown', e => {
   } else if (e.key === 'Enter') { e.preventDefault(); pick(sugInput!, sugItems[sugOn]); }
   else if (e.key === 'Escape') { e.preventDefault(); suggest.hidden = true; }
 });
-legRows.addEventListener('focusout', () => setTimeout(() => {
-  if (!legRows.contains(document.activeElement)) suggest.hidden = true;
-}));
+// Typed a place but didn't tap a suggestion? Take the best match when leaving the field
+const autoPick = (t: HTMLInputElement) => {
+  if (t.dataset.place === undefined || t.dataset.id || !t.value.trim()) return;
+  const best = search(t.value)[0];
+  if (best) pick(t, best);
+};
+legRows.addEventListener('focusout', e => {
+  autoPick(e.target as HTMLInputElement);
+  setTimeout(() => { if (!legRows.contains(document.activeElement)) suggest.hidden = true; });
+});
 legRows.addEventListener('click', e => {
   const rm = (e.target as Element).closest('.rm');
   if (rm && legRows.children.length > 1) rm.closest('.leg-edit')!.remove();
@@ -428,7 +467,9 @@ function openTrip(trip?: Trip) {
   $('#tripTitle').textContent = trip ? 'Edit trip' : 'New trip';
   field(tripForm, 'name').value = trip?.name ?? '';
   legRows.innerHTML = '';
-  if (trip) trip.legs.forEach(l => addLeg(l)); else { addLeg(); addLeg(); }
+  if (trip) trip.legs.forEach(l => addLeg(l));
+  else { addLeg(); field(legRows, 'date').value = new Date().toLocaleDateString('sv'); addLeg(); } // today, YYYY-MM-DD
+  tripForm.querySelector<HTMLElement>('.formerr')!.hidden = true;
   tripForm.showModal();
 }
 $('#newTrip').onclick = () => openTrip();
@@ -437,9 +478,12 @@ tripForm.querySelector('form')!.addEventListener('submit', e => {
   if (e.submitter?.getAttribute('value') !== 'save') return;
   const rows = [...legRows.children];
   // Legs must be in date order
-  rows.forEach((r, i) => field(r, 'date').setCustomValidity(
-    i && field(r, 'date').value < field(rows[i - 1], 'date').value ? 'This leg is earlier than the previous one' : ''));
-  if (!(e.target as HTMLFormElement).reportValidity()) return e.preventDefault();
+  rows.forEach((r, i) => {
+    const d = field(r, 'date').value, prev = i ? field(rows[i - 1], 'date').value : '';
+    field(r, 'date').setCustomValidity(d && prev && d < prev ? 'This leg is earlier than the previous one' : '');
+  });
+  legRows.querySelectorAll<HTMLInputElement>('[data-place]').forEach(autoPick);
+  if (!validate(e.target as HTMLFormElement)) return e.preventDefault();
   const legs: Leg[] = rows.map(r => {
     const mode = r.querySelector<HTMLInputElement>('[type=radio]:checked')!.value as Mode;
     const leg: Leg = { from: known.get(field(r, 'from').dataset.id!)!, to: known.get(field(r, 'to').dataset.id!)!, mode, date: field(r, 'date').value };
@@ -481,6 +525,7 @@ function openAct(stop: Stop, a?: Activity) {
   f.querySelector<HTMLTextAreaElement>('[name=note]')!.value = a?.note ?? '';
   f.querySelector<HTMLInputElement>(`[name=kind][value=${a?.kind ?? 'museum'}]`)!.checked = true;
   thumbs(null);
+  f.querySelector<HTMLElement>('.formerr')!.hidden = true;
   actForm.showModal();
 }
 field(actForm, 'photos').onchange = e => thumbs((e.target as HTMLInputElement).files);
@@ -494,6 +539,7 @@ $('#thumbs').addEventListener('click', e => {
 actForm.querySelector('form')!.addEventListener('submit', async e => {
   if (e.submitter?.getAttribute('value') !== 'save') return;
   e.preventDefault(); // close only once photos are stored
+  if (!validate(e.target as HTMLFormElement)) return;
   // Snapshot inputs now: photo processing is async and the form may be reset before it finishes
   const f = new FormData(e.target as HTMLFormElement), files = [...field(actForm, 'photos').files ?? []], gone = new Set(removed);
   const stop = actStop!, editingAct = actEditing, trip = current!.trip, btn = $<HTMLButtonElement>('#actSave');
@@ -519,6 +565,54 @@ actForm.querySelector('form')!.addEventListener('submit', async e => {
     btn.disabled = false; btn.textContent = 'Save';
   }
 });
+
+// ---------- Backup page ----------
+const backupDlg = $<HTMLDialogElement>('#backup'), bkErr = backupDlg.querySelector<HTMLElement>('.formerr')!;
+let pending: Awaited<ReturnType<typeof readBackup>> | null = null;
+const bkFail = (e: unknown) => { bkErr.textContent = e instanceof Error ? e.message : String(e); bkErr.hidden = false; };
+function openBackup() {
+  const photos = lib.trips.reduce((n, t) => n + t.activities.reduce((m, a) => m + a.photos.length, 0), 0);
+  $('#bkInfo').textContent = `Save all ${n(lib.trips.length, 'trip')} and ${n(photos, 'photo')} into one file you can keep or move to another device.`;
+  $<HTMLInputElement>('#bkFile').value = ''; $('#bkPick').textContent = 'Choose backup file…';
+  $('#bkPreview').hidden = true; bkErr.hidden = true; pending = null;
+  backupDlg.showModal();
+}
+$('#bkExport').onclick = async () => {
+  const btn = $<HTMLButtonElement>('#bkExport');
+  btn.disabled = true; btn.textContent = 'Preparing…'; bkErr.hidden = true;
+  try {
+    const where = await saveFile(backupName(), await exportBackup(lib, $<HTMLInputElement>('#bkPhotos').checked));
+    toast(`Backup saved to ${where}`);
+  } catch (e) { if ((e as Error).name !== 'AbortError') bkFail(e); }
+  finally { btn.disabled = false; btn.textContent = 'Export backup'; }
+};
+$<HTMLInputElement>('#bkFile').onchange = async e => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  bkErr.hidden = true; $('#bkPreview').hidden = true;
+  try {
+    pending = await readBackup(file);
+    const s = summary(pending);
+    $('#bkPick').textContent = file.name;
+    $('#bkSummary').textContent = `${n(s.trips, 'trip')}, ${n(s.activities, 'activity', 'activities')} and ${n(s.photos, 'photo')}${s.date ? `, saved ${dfmt(s.date, { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}.`;
+    $('#bkPreview').hidden = false;
+  } catch (err) { bkFail(err); }
+};
+async function applyBackup(mode: 'merge' | 'replace') {
+  if (!pending || !canSave) return bkFail('Nothing to import.');
+  if (mode === 'replace' && !await ask(`Replace all ${n(lib.trips.length, 'trip')} on this device with the backup? Trips that aren't in the backup will be deleted.`, 'Replace')) return;
+  try {
+    const unused = await restoreBackup(lib, pending, mode);
+    learnPlaces();
+    await commit();
+    await deletePhotos(unused);
+    backupDlg.close();
+    toast(mode === 'replace' ? 'Backup restored' : `Added ${n(pending.library.trips.length, 'trip')} from the backup`);
+    select(null);
+  } catch (e) { bkFail(e); }
+}
+$('#bkMerge').onclick = () => applyBackup('merge');
+$('#bkReplace').onclick = () => applyBackup('replace');
 
 // ---------- Static bits ----------
 $('#all').innerHTML = `${icon('Globe')}All trips`;
@@ -555,6 +649,13 @@ function stars() {
 }
 stars(); addEventListener('resize', stars);
 
+document.querySelectorAll('form').forEach(f => {
+  f.noValidate = true;
+  f.addEventListener('input', e => (e.target as Element).classList?.remove('invalid'));
+  // Return/Go on a keyboard submits without a button: it would close the dialog and lose the input
+  f.addEventListener('submit', e => { if (!e.submitter) e.preventDefault(); });
+});
+
 // ---------- Start ----------
 // Web / home-screen version: work offline and keep the big lazy assets cached
 if (!isTauri() && 'serviceWorker' in navigator) {
@@ -567,7 +668,10 @@ try {
 } catch (e) {
   showError(`Could not open your library (${e}). Nothing will be overwritten; a backup is kept as library.bak.json.`);
 }
-for (const t of lib.trips) for (const l of t.legs) for (const p of [l.from, l.to]) { known.set(p.id, p); if (p.city) known.set(p.city.id, p.city); }
+function learnPlaces() {
+  for (const t of lib.trips) for (const l of t.legs) for (const p of [l.from, l.to]) { known.set(p.id, p); if (p.city) known.set(p.city.id, p.city); }
+}
+learnPlaces();
 rebuild(); render(); globe.refresh(); sheet('collapsed');
 // Warm the catalog once the app is idle, so the first search is instant
 (window.requestIdleCallback ?? setTimeout)(() => ensureCatalog());
