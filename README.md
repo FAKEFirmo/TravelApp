@@ -13,7 +13,7 @@ Platforms: macOS first, then Android (Samsung), then Windows. Built with [Tauri 
 
 ## Mac widget (personal use)
 
-A "Travel globe" desktop widget: your visited countries, routes and totals on a globe that turns a little every 10 minutes (macOS widgets can't animate live). It's signed with your own Apple Development certificate (a free Apple ID in Xcode is enough), so it's for your own Mac:
+A "Travel globe" desktop widget: your visited countries, routes and totals seen from orbit (angled view with the curved horizon), framed around the places you've been; the camera sways a little every 10 minutes (macOS widgets can't animate live). Sizes: small (1×1), wide (2×1) and large. It's signed with your own Apple Development certificate (a free Apple ID in Xcode is enough), so it's for your own Mac:
 
 ```sh
 npm run widget   # builds the app with the widget, signs it, installs it in /Applications
