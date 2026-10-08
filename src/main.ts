@@ -48,11 +48,7 @@ async function commit() {
   try { await save(lib); } catch (e) { showError(`Could not save: ${e}`); }
 }
 
-function showError(msg: string) {
-  const el = document.createElement('div');
-  el.className = 'err'; el.textContent = msg;
-  document.body.append(el); setTimeout(() => el.remove(), 8000);
-}
+const showError = (msg: string) => toast(msg, 'err', 8000);
 
 function select(t: TripView | null) {
   if (t !== current) detail = false;
@@ -572,7 +568,7 @@ let pending: Awaited<ReturnType<typeof readBackup>> | null = null;
 const bkFail = (e: unknown) => { bkErr.textContent = e instanceof Error ? e.message : String(e); bkErr.hidden = false; };
 function openBackup() {
   const photos = lib.trips.reduce((n, t) => n + t.activities.reduce((m, a) => m + a.photos.length, 0), 0);
-  $('#bkInfo').textContent = `Save all ${n(lib.trips.length, 'trip')} and ${n(photos, 'photo')} into one file you can keep or move to another device.`;
+  $('#bkInfo').textContent = `Saves your ${n(lib.trips.length, 'trip')} and ${n(photos, 'photo')} in one file you can keep or move to another device.`;
   $<HTMLInputElement>('#bkFile').value = ''; $('#bkPick').textContent = 'Choose backup file…';
   $('#bkPreview').hidden = true; bkErr.hidden = true; pending = null;
   backupDlg.showModal();
@@ -582,7 +578,9 @@ $('#bkExport').onclick = async () => {
   btn.disabled = true; btn.textContent = 'Preparing…'; bkErr.hidden = true;
   try {
     const where = await saveFile(backupName(), await exportBackup(lib, $<HTMLInputElement>('#bkPhotos').checked));
-    toast(`Backup saved to ${where}`);
+    // Native returns a path: name the place people know instead
+    toast(`Backup saved to ${where.includes('/Downloads') ? 'your Downloads folder'
+      : where.startsWith('/') ? 'the Files app (On My iPhone › Little Prince)' : where}`);
   } catch (e) { if ((e as Error).name !== 'AbortError') bkFail(e); }
   finally { btn.disabled = false; btn.textContent = 'Export backup'; }
 };

@@ -101,7 +101,12 @@ export function validate(form: HTMLFormElement) {
   return false;
 }
 
-export function toast(text: string) {
-  const el = Object.assign(document.createElement('div'), { className: 'toast', textContent: text });
-  document.body.append(el); setTimeout(() => el.remove(), 4000);
+/** Short message that floats above everything, open dialogs included (a popover lives in the top layer) */
+export function toast(text: string, kind: 'ok' | 'err' = 'ok', ms = 4000) {
+  const el = Object.assign(document.createElement('div'), { className: kind === 'ok' ? 'toast' : 'toast err', textContent: text });
+  el.setAttribute('role', 'status');
+  el.popover = 'manual';
+  document.body.append(el);
+  el.showPopover?.();
+  setTimeout(() => el.remove(), ms);
 }

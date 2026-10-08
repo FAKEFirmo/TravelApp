@@ -236,8 +236,6 @@ select { font: inherit; color: var(--text); background: rgba(255,255,255,.06); b
   background: rgba(11,16,38,.8); border: 0; }
 .thumbs .old button svg.lucide { margin: 0; width: 12px; height: 12px; }
 .thumbs .old.gone img { opacity: .25; }
-.err { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 20; max-width: calc(100vw - 32px);
-  padding: 10px 14px; border-radius: 10px; background: #5a1f2a; border: 1px solid #c94c5a; font-size: 13px; }
 
 input, textarea { -webkit-user-select: text; user-select: text; }
 @media (pointer: coarse) { input, textarea, select { font-size: 16px; } } /* iOS zooms into fields under 16px */
@@ -266,5 +264,6 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .hold svg.lucide { position: static; transform: none; width: 20px; height: 20px; }
 .list { -webkit-touch-callout: none; }
 .list:not(.detail-list)::after { content: ''; display: block; height: 140px; } /* room to hold below the last trip */
-.toast { position: fixed; left: 50%; top: var(--st); transform: translateX(-50%); z-index: 40; max-width: calc(100vw - 32px);
-  padding: 10px 14px; border-radius: 10px; background: #1d3a2e; border: 1px solid #3f8a5a; font-size: 13px; }
+.toast { position: fixed; inset: var(--st) auto auto 50%; margin: 0; transform: translateX(-50%); max-width: calc(100vw - 32px);
+  padding: 10px 14px; border-radius: 10px; background: #1d3a2e; border: 1px solid #3f8a5a; color: var(--text); font-size: 13px; }
+.toast.err { background: #5a1f2a; border-color: #c94c5a; }
