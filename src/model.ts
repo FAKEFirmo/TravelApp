@@ -95,12 +95,20 @@ export function km(a: { lat: number; lng: number }, b: { lat: number; lng: numbe
 
 // ---------- Derived views ----------
 export interface LegView extends Leg { trip: Trip; i: number; km: number }
-export interface Stop { place: Place; arrive?: LegView; depart?: LegView; acts: Activity[]; transit: boolean }
+export interface Stop {
+  place: Place; key: string;
+  ids: Set<string>; // every city id merged into this stop (older trips may use ids from a previous catalog)
+  arrive?: LegView; depart?: LegView;
+  transfers: LegView[]; // legs within the city, e.g. MXP airport → Milan
+  acts: Activity[]; transit: boolean;
+}
 export interface TripView {
   trip: Trip; legs: LegView[]; km: number; places: Place[]; countries: Set<string>; stops: Stop[]; start: string;
 }
 
 export const cityOf = (p: Place) => p.city ?? p;
+/** Same city whatever catalog version the place came from */
+export const cityKey = (p: Place) => { const c = cityOf(p); return `${c.name}|${c.country}`; };
 
 export function view(trip: Trip): TripView {
   const legs = trip.legs.map((l, i) => ({ ...l, trip, i, km: km(l.from, l.to) }));
@@ -108,13 +116,17 @@ export function view(trip: Trip): TripView {
   // Stops = consecutive leg endpoints grouped by city (Malpensa counts as Milan)
   const stops: Stop[] = [];
   const at = (p: Place) => {
-    const c = cityOf(p); let s = stops.at(-1);
-    if (s?.place.id !== c.id) stops.push(s = { place: c, acts: [], transit: false });
+    const c = cityOf(p), key = cityKey(p); let s = stops.at(-1);
+    if (s?.key !== key) stops.push(s = { place: c, key, ids: new Set(), transfers: [], acts: [], transit: false });
+    s.ids.add(c.id);
     return s;
   };
-  for (const l of legs) { at(l.from).depart = l; at(l.to).arrive = l; }
+  for (const l of legs) {
+    if (cityKey(l.from) === cityKey(l.to)) at(l.from).transfers.push(l); // airport ↔ city: part of the stop
+    else { at(l.from).depart = l; at(l.to).arrive = l; }
+  }
   for (const a of [...trip.activities].sort((x, y) => x.date.localeCompare(y.date)))
-    (stops.find(s => s.place.id === a.stop && s.arrive) ?? stops.find(s => s.place.id === a.stop))?.acts.push(a);
+    (stops.find(s => s.ids.has(a.stop) && s.arrive) ?? stops.find(s => s.ids.has(a.stop)))?.acts.push(a);
   // A same-day airport stopover with nothing done there is a transit
   for (const s of stops) s.transit = !!(s.arrive && s.depart && s.place.iata && !s.acts.length && s.arrive.date === s.depart.date);
   return {

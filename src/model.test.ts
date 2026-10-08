@@ -24,4 +24,17 @@ assert.equal(v.stops[2].transit, false);
 assert.deepEqual(v.stops[2].acts.map(a => a.title), ['Colosseum', 'Dinner'], 'activities sorted by date');
 assert.equal(v.start, '2025-05-01');
 assert.equal(Math.round(km(MIL, ROM)), 477);
+// Airport → city transfer stays inside the city's stop; an older catalog's Milan (different id) still merges
+const MIL2 = { ...MIL, id: 'MIL-new' };
+const v2 = view({ id: 't2', name: 'T2', activities: [
+  { id: 'a', stop: 'MIL-new', kind: 'food', title: 'Risotto', date: '2025-06-01', lat: 0, lng: 0, photos: [] }], legs: [
+  { from: ROM, to: MXP, mode: 'flight', date: '2025-06-01' },
+  { from: MXP, to: MIL2, mode: 'train', date: '2025-06-01' },
+  { from: MIL2, to: ROM, mode: 'train', date: '2025-06-03' },
+] });
+assert.deepEqual(v2.stops.map(s => s.place.name), ['ROM', 'MIL', 'ROM']);
+assert.equal(v2.stops[1].transfers.length, 1, 'MXP → Milan is a transfer inside Milan');
+assert.equal(v2.stops[1].arrive?.mode, 'flight');
+assert.equal(v2.stops[1].depart?.date, '2025-06-03');
+assert.deepEqual(v2.stops[1].acts.map(a => a.title), ['Risotto'], 'activity found via the merged id');
 console.log('model ok');

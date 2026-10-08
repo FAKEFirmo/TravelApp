@@ -3,7 +3,7 @@ import placesUrl from './data/places.json?url';
 import satelliteUrl from './assets/earth-blue-marble.jpg';
 import { isTauri } from '@tauri-apps/api/core';
 import {
-  MODES, KINDS, AIRLINES, AIRCRAFT, CLASSES, view, cityOf,
+  MODES, KINDS, AIRLINES, AIRCRAFT, CLASSES, view, cityOf, cityKey,
   type Aircraft, type Activity, type Kind, type Leg, type LegView, type Library, type Mode, type Place, type Stop, type Trip, type TripView,
 } from './model';
 import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl, saveFile } from './store';
@@ -121,6 +121,8 @@ function renderDetail(t: TripView) {
       return `
       <li class="stop ${s.transit ? 'transit' : ''}"><span class="pin"></span>
         <div class="sh" data-stop="${i}"><b>${esc(s.place.name)}</b><small>${stopWhen(s)}</small></div>
+        ${s.transfers.map(l => `<div class="xfer" data-i="${l.i}"><span style="color:${MODES[l.mode].color}">${icon(MODES[l.mode].icon)}</span>
+          ${MODES[l.mode].label} · ${code(l.from)} → ${code(l.to)}${l.info ? ' · ' + esc(l.info) : ''} · ${dfmt(l.date)}</div>`).join('')}
         ${s.acts.map(a => `
           <div class="act swipeable">
             <div class="swipe" data-act="${a.id}"><span class="ic">${icon(KINDS[a.kind].icon)}</span>
@@ -431,6 +433,7 @@ function pick(input: HTMLInputElement, p: Place) {
   // Where a leg ends is where the next one starts, if that's still empty
   const next = input.name === 'to' && input.closest('.leg-edit')?.nextElementSibling?.querySelector<HTMLInputElement>('[name=from]');
   if (next && !next.value) pick(next, p);
+  updateLegs();
 }
 function showSuggest(input: HTMLInputElement) {
   sugInput = input; sugItems = search(input.value); sugOn = 0;
@@ -458,20 +461,23 @@ const legRows = $('#legRows');
 let editing: Trip | null = null, legN = 0;
 const field = (row: Element, name: string) => row.querySelector<HTMLInputElement>(`[name=${name}]`)!;
 
-function addLeg(leg?: Leg) {
-  const n = legN++, prev = legRows.lastElementChild;
-  legRows.insertAdjacentHTML('beforeend', `<div class="leg-edit">
+function addLeg(leg?: Leg, before: Element | null = null) {
+  const n = legN++, prev = before ? before.previousElementSibling : legRows.lastElementChild;
+  const tpl = document.createElement('template');
+  tpl.innerHTML = `<div class="leg-edit">
     <div class="chips">${Object.entries(MODES).map(([k, m]) => `
       <label title="${m.label}"><input type="radio" name="mode${n}" value="${k}" ${k === (leg?.mode ?? 'flight') ? 'checked' : ''}>${icon(m.icon)}</label>`).join('')}
       <button type="button" class="rm" title="Remove leg">${icon('X')}</button></div>
-    <div class="row"><input name="from" placeholder="From" aria-label="Leg ${legRows.children.length + 1} from" required autocomplete="off" data-place>
-      <input name="to" placeholder="To" aria-label="Leg ${legRows.children.length + 1} to" required autocomplete="off" data-place></div>
-    <div class="row"><input name="date" type="date" aria-label="Leg ${legRows.children.length + 1} date" required><input name="info" maxlength="40" placeholder="Flight no., operator… (optional)"></div>
+    <div class="row"><input name="from" placeholder="From" required autocomplete="off" data-place>
+      <input name="to" placeholder="To" required autocomplete="off" data-place></div>
+    <div class="row"><input name="date" type="date" required><input name="info" maxlength="40" placeholder="Flight no., operator… (optional)"></div>
     <div class="row fl"><input name="aircraft" list="aircraftList" placeholder="Aircraft (optional)" autocomplete="off" style="flex:2">
       <input name="seat" maxlength="6" placeholder="Seat" style="flex:1"></div>
     <div class="row fl"><select name="cls" style="flex:1">${CLASSES.map(c => `<option>${c}</option>`).join('')}</select></div>
-  </div>`);
-  const row = legRows.lastElementChild!;
+    <div class="hints"></div>
+  </div>`;
+  const row = tpl.content.firstElementChild!;
+  legRows.insertBefore(row, before);
   const setPlace = (name: string, p?: Place) => { if (p) { known.set(p.id, p); pick(field(row, name), p); } };
   if (leg) {
     setPlace('from', leg.from); setPlace('to', leg.to);
@@ -482,7 +488,36 @@ function addLeg(leg?: Leg) {
     setPlace('from', known.get(field(prev, 'to').dataset.id ?? ''));
     field(row, 'date').value = field(prev, 'date').value;
   }
+  updateLegs();
 }
+
+/**
+ * Keep leg labels numbered, and suggest airport ↔ city transfers: a leg landing at MXP offers "MXP → Milan"
+ * unless the next leg already leaves from MXP (a connection) or from Milan; a first leg leaving from MXP offers
+ * "Milan → MXP" before it, likewise.
+ */
+function updateLegs() {
+  const rows = [...legRows.children];
+  const at = (r: Element | null | undefined, name: string) => r ? known.get(field(r, name).dataset.id ?? '') : undefined;
+  rows.forEach((r, i) => {
+    for (const name of ['from', 'to', 'date']) field(r, name).setAttribute('aria-label', `Leg ${i + 1} ${name}`);
+    const hints: string[] = [], to = at(r, 'to'), from = at(r, 'from');
+    const hint = (dir: string, a: Place, b: Place) =>
+      `<button type="button" class="xfer-hint" data-dir="${dir}" data-from="${a.id}" data-to="${b.id}">${icon('Plus')}Transfer ${esc(placeShort(a))} → ${esc(placeShort(b))}</button>`;
+    // After landing: unless the next leg is a connecting flight from this airport or already the transfer
+    if (to?.iata && to.city) {
+      const next = rows[i + 1], nFrom = at(next, 'from'), nTo = at(next, 'to');
+      const fromHere = nFrom?.id === to.id && !!nTo;
+      const connection = fromHere && next!.querySelector<HTMLInputElement>('[type=radio]:checked')?.value === 'flight';
+      if (!(fromHere && (connection || cityKey(nTo!) === cityKey(to)))) hints.push(hint('after', to, to.city));
+    }
+    // Before departing: unless the previous leg already arrives at this airport
+    if (from?.iata && from.city && at(rows[i - 1], 'to')?.id !== from.id) hints.unshift(hint('before', from.city, from));
+    r.querySelector('.hints')!.innerHTML = hints.join('');
+  });
+}
+const placeShort = (p: Place) => p.iata ?? p.name;
+legRows.addEventListener('change', e => { if ((e.target as HTMLInputElement).type === 'radio') updateLegs(); });
 legRows.addEventListener('input', e => {
   const t = e.target as HTMLInputElement;
   if (t.dataset.place === undefined) return;
@@ -512,7 +547,16 @@ legRows.addEventListener('focusout', e => {
 });
 legRows.addEventListener('click', e => {
   const rm = (e.target as Element).closest('.rm');
-  if (rm && legRows.children.length > 1) rm.closest('.leg-edit')!.remove();
+  if (rm && legRows.children.length > 1) { rm.closest('.leg-edit')!.remove(); updateLegs(); }
+  const x = (e.target as Element).closest<HTMLElement>('.xfer-hint');
+  if (x) {
+    const row = x.closest('.leg-edit')!, after = x.dataset.dir === 'after';
+    const leg: Leg = { from: known.get(x.dataset.from!)!, to: known.get(x.dataset.to!)!, mode: 'train', date: field(row, 'date').value };
+    const next = row.nextElementSibling;
+    addLeg(leg, after ? next : row);
+    // The leg after the airport now starts from the city
+    if (after && next && field(next, 'from').dataset.id === leg.from.id) pick(field(next, 'from'), leg.to);
+  }
 });
 $('#addLeg').onclick = () => addLeg();
 

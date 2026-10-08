@@ -120,7 +120,7 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
         const p = m.p!;
         el.className = 'mk';
         el.title = `${p.name}${p.iata ? ` (${p.iata})` : ''} · ${p.country}`;
-        if (m.label) el.innerHTML = `<span>${esc(p.name)}</span>`;
+        if (m.label) el.innerHTML = `<span>${esc(p.iata ? `${p.iata} airport` : p.name)}</span>`;
         el.onclick = () => on.place(p);
       }
       return el;
@@ -161,11 +161,12 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
     const { trips, current, detail } = s();
     globe.arcStroke((current ? 0.8 : 0.35) * Math.min(1, Math.max(0.01, alt / 2.4)));
     const places = current ? current.places : [...new Map(trips.flatMap(t => t.places).map(p => [p.id, p])).values()];
-    // Cities before airports; a place only shows if nothing shown is within ~alt*400 km (≈ 45px)
-    const shown: Place[] = [];
-    for (const p of [...places].sort((a, b) => +!!a.iata - +!!b.iata))
-      if (shown.every(q => km(p, q) > alt * 400)) shown.push(p);
-    let marks: Mark[] = shown.map(p => ({ p, lat: p.lat, lng: p.lng, label: !!current }));
+    // Every place a line ends at gets its own dot, so dots always sit on the line ends. Only the names are
+    // thinned out: cities before airports, and a name only shows if no shown name is within ~alt*400 km (≈ 45px)
+    const named: Place[] = [];
+    if (current) for (const p of [...places].sort((a, b) => +!!a.iata - +!!b.iata))
+      if (named.every(q => km(p, q) > alt * 400)) named.push(p);
+    let marks: Mark[] = places.map(p => ({ p, lat: p.lat, lng: p.lng, label: named.includes(p) }));
     // Detail view: activity icons appear once zoomed in; too-close ones fold into a +N badge
     if (detail && current && alt < 0.6) {
       const gap = alt * 250, acts: Mark[] = [];
@@ -173,7 +174,7 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
         const near = acts.find(m => km(a, m.a!) <= gap);
         if (near) near.more!++; else acts.push({ a, lat: a.lat, lng: a.lng, more: 0 });
       }
-      marks = [...marks.filter(m => acts.every(b => km(m, b) > gap)), ...acts];
+      marks = [...marks.filter(m => acts.every(b => km(m, b) > 0.5)), ...acts]; // hide only dots right under an icon
     }
     globe.htmlElementsData(marks);
   }
