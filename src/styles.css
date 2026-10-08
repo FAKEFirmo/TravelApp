@@ -254,16 +254,17 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .mac-only { display: none; }
 @media (pointer: fine) { .mac-only { display: inline; } }
 
-/* Press-and-hold indicator (opens the backup page) */
-.hold { position: fixed; z-index: 30; width: 56px; height: 56px; margin: -28px 0 0 -28px; pointer-events: none;
-  border-radius: 50%; background: rgba(16,22,48,.92); display: grid; place-items: center; color: var(--gold); }
-.hold svg { position: absolute; inset: 6px; transform: rotate(-90deg); }
-.hold circle { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 120; stroke-dashoffset: 120; }
-.hold.go circle { animation: fill-ring .6s linear forwards; }
+/* Pull-up-and-hold indicator below the trip list (opens the backup page) */
+.pull { position: absolute; left: 50%; z-index: 2; width: 52px; height: 52px; opacity: 0; pointer-events: none;
+  transform: translateX(-50%) scale(.6); border-radius: 50%; display: grid; place-items: center; color: var(--gold);
+  background: rgba(255,255,255,.06); }
+.pull svg { position: absolute; inset: 4px; transform: rotate(-90deg); }
+.pull circle { fill: none; stroke: var(--gold); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 120; stroke-dashoffset: 120; }
+.pull.go circle { animation: fill-ring .75s linear forwards; }
 @keyframes fill-ring { to { stroke-dashoffset: 0; } }
-.hold svg.lucide { position: static; transform: none; width: 20px; height: 20px; }
-.list { -webkit-touch-callout: none; }
-.list:not(.detail-list)::after { content: ''; display: block; height: 140px; } /* room to hold below the last trip */
+.pull svg.lucide { position: static; transform: none; width: 20px; height: 20px; }
+.list { -webkit-touch-callout: none; overscroll-behavior: contain; }
+.list.springback, .list.springback + .pull { transition: transform .25s cubic-bezier(.2,.8,.2,1), opacity .2s; }
 .toast { position: fixed; inset: var(--st) auto auto 50%; margin: 0; transform: translateX(-50%); max-width: calc(100vw - 32px);
   padding: 10px 14px; border-radius: 10px; background: #1d3a2e; border: 1px solid #3f8a5a; color: var(--text); font-size: 13px; }
 .toast.err { background: #5a1f2a; border-color: #c94c5a; }

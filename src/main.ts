@@ -201,6 +201,7 @@ list.addEventListener('click', async e => {
   if ((el = q('[data-i]'))) { const l = current!.legs[+el.dataset.i!]; return fly([l.from, l.to], l === focused ? null : l); }
   if ((el = q('.trip'))) { const t = trips.find(t => t.trip.id === el!.dataset.id)!; return select(t === current ? null : t); }
   if (!detail && current && !held) select(null); // tap on empty space deselects
+  held = false;
 });
 enableSwipe(list);
 
@@ -216,28 +217,56 @@ addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b' && !document.querySelector('dialog[open]')) { e.preventDefault(); openBackup(); }
 });
 
-// ---------- Press and hold the empty space below the trips → backup page ----------
-const holdEl = $('#hold');
-holdEl.querySelector('span')!.innerHTML = icon('Archive');
-let held = false;
+// ---------- Pull up past the end of the trip list and hold → backup page ----------
+// Hidden until you overscroll (like pull-to-refresh): the list stretches, an icon rises with a ring that fills
+// while you keep holding; full ring = open. Let go early and it springs back. Touch and mouse drag both work.
+const pullEl = $('#pull');
+pullEl.querySelector('span')!.innerHTML = icon('Archive');
+let held = false; // swallow the click that ends a pull
 {
-  let timer = 0, show = 0, x0 = 0, y0 = 0;
-  const cancel = () => { clearTimeout(timer); clearTimeout(show); holdEl.hidden = true; holdEl.classList.remove('go'); };
-  list.addEventListener('pointerdown', e => {
-    held = false;
-    const t = e.target as Element;
-    if (detail || t.closest('.trip, button, input, a')) return;
-    x0 = e.clientX; y0 = e.clientY;
-    // Show the ring only after a moment, so ordinary taps don't flash it
-    show = setTimeout(() => {
-      Object.assign(holdEl.style, { left: x0 + 'px', top: y0 + 'px' });
-      holdEl.hidden = false; void holdEl.offsetWidth; holdEl.classList.add('go');
-    }, 150);
-    timer = setTimeout(() => { held = true; cancel(); openBackup(); }, 750);
-  });
-  list.addEventListener('pointermove', e => { if (Math.hypot(e.clientX - x0, e.clientY - y0) > 10) cancel(); });
-  for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) list.addEventListener(ev, cancel);
-  list.addEventListener('contextmenu', e => e.preventDefault()); // long press on Mac trackpads / Android
+  const ARM = 64, MAX = 110, FILL = 750; // px of pull before the ring starts filling, rubber-band cap, ms to fill
+  let y0: number | null = null, pulling = false, armed = false, timer = 0;
+  const atBottom = () => list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
+  const set = (pull: number) => {
+    list.style.transform = pull ? `translateY(${-pull}px)` : '';
+    pullEl.style.opacity = String(Math.min(1, pull / ARM));
+    pullEl.style.transform = `translateX(-50%) translateY(${Math.max(0, ARM - pull) * 0.4}px) scale(${0.6 + 0.4 * Math.min(1, pull / ARM)})`;
+    if (pull >= ARM && !armed) {
+      armed = true; pullEl.classList.add('go');
+      timer = setTimeout(() => { held = true; release(); navigator.vibrate?.(15); openBackup(); }, FILL);
+    } else if (pull < ARM && armed) { armed = false; clearTimeout(timer); pullEl.classList.remove('go'); }
+  };
+  const release = () => {
+    y0 = null; pulling = false; armed = false; clearTimeout(timer);
+    pullEl.classList.remove('go');
+    list.classList.add('springback'); set(0);
+    setTimeout(() => list.classList.remove('springback'), 250);
+  };
+  const start = (y: number, target: EventTarget | null) => {
+    if (detail || (target as Element).closest?.('input, .swipe-actions')) return;
+    y0 = y; pulling = false; held = false;
+    pullEl.style.bottom = `${aside.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom + 14}px`;
+  };
+  /** Returns true while the gesture is a pull (caller then stops the native scroll) */
+  const move = (y: number) => {
+    if (y0 === null) return false;
+    if (!pulling) {
+      if (!(atBottom() && y < y0)) { if (!atBottom()) y0 = y; return false; } // keep scrolling normally until the end
+      pulling = true; y0 = y;
+    }
+    const raw = y0 - y;
+    if (raw < 0) { set(0); pulling = false; return false; } // moved back down past the start: normal scrolling again
+    set(MAX * (1 - Math.exp(-raw / MAX))); // rubber band: easy at first, harder near the cap
+    return true;
+  };
+  list.addEventListener('touchstart', e => { if (e.touches.length === 1) start(e.touches[0].clientY, e.target); }, { passive: true });
+  list.addEventListener('touchmove', e => { if (e.touches.length === 1 && move(e.touches[0].clientY)) e.preventDefault(); }, { passive: false });
+  list.addEventListener('touchend', () => y0 !== null && release());
+  list.addEventListener('touchcancel', () => y0 !== null && release());
+  // Mouse: drag the list upward with the button held
+  list.addEventListener('mousedown', e => { if (e.button === 0) start(e.clientY, e.target); });
+  addEventListener('mousemove', e => { if (y0 !== null && e.buttons === 1 && move(e.clientY)) e.preventDefault(); });
+  addEventListener('mouseup', () => { if (y0 !== null) { if (pulling) held = true; release(); } });
 }
 // ---------- Photo viewer: arrows, keys or swipe through the whole trip ----------
 const lightbox = $<HTMLDialogElement>('#lightbox');

@@ -26,6 +26,7 @@
       <input id="search" type="search" placeholder="Search trips" autocomplete="off">
     </header>
     <div class="list" id="list"></div>
+    <div class="pull" id="pull" aria-hidden="true"><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/></svg><span></span></div>
     <footer>
       <button id="all"></button>
       <button class="primary" id="newTrip"></button>
@@ -81,11 +82,10 @@
         <div class="row"><button type="button" id="bkMerge">Add to my trips</button><button type="button" class="danger" id="bkReplace">Replace everything</button></div>
       </div>
     </section>
-    <p class="m tip">Open this anytime by holding the empty space below your trips<span class="mac-only">, or with ⌘B</span>.</p>
+    <p class="m tip">Open this anytime: pull your trip list up past its end and hold<span class="mac-only">, or press ⌘B</span>.</p>
     <div class="actions"><button value="cancel">Close</button></div>
   </form></dialog>
 
-  <div class="hold" id="hold" hidden><svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19"/></svg><span></span></div>
 
   <dialog id="ask"><form method="dialog">
     <p></p>
