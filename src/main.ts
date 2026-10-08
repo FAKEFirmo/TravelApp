@@ -6,7 +6,7 @@ import {
   MODES, KINDS, AIRLINES, AIRCRAFT, CLASSES, view, cityOf, cityKey,
   type Aircraft, type Activity, type Kind, type Leg, type LegView, type Library, type Mode, type Place, type Stop, type Trip, type TripView,
 } from './model';
-import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl, saveFile } from './store';
+import { load, save, addPhoto, deletePhoto, photoUrl, fullPhotoUrl, saveFile, updateWidget } from './store';
 import { createGlobe } from './globe';
 import { icon, esc, fmt, dfmt, hm, ask, enableSwipe, validate, toast } from './ui';
 import { exportBackup, readBackup, restoreBackup, deletePhotos, summary, backupName } from './backup';
@@ -41,11 +41,24 @@ function rebuild() {
   ].map(([v, k]) => `<div class="stat"><b>${v}</b><small>${k}</small></div>`).join('');
 }
 
+/** Summary for the macOS widget: visited countries, every route, every place, totals */
+function sendWidget() {
+  const legs = trips.flatMap(t => t.legs);
+  updateWidget({
+    visited: [...visited],
+    arcs: legs.map(l => [l.from.lat, l.from.lng, l.to.lat, l.to.lng]),
+    colors: legs.map(l => MODES[l.mode].color),
+    dots: [...new Map(legs.flatMap(l => [l.from, l.to]).map(p => [p.id, [p.lat, p.lng]])).values()],
+    countries: visited.size, km: Math.round(trips.reduce((n, t) => n + t.km, 0)), trips: trips.length,
+  });
+}
+
 /** Apply a change: recompute, redraw, persist */
 async function commit() {
   rebuild(); render(true); globe.refresh(true);
   if (!canSave) return showError('Changes are not being saved because the library could not be loaded.');
   try { await save(lib); } catch (e) { showError(`Could not save: ${e}`); }
+  sendWidget();
 }
 
 const showError = (msg: string) => toast(msg, 'err', 8000);
@@ -775,5 +788,6 @@ function learnPlaces() {
 }
 learnPlaces();
 rebuild(); render(); globe.refresh(); sheet('collapsed');
+if (canSave) sendWidget();
 // Warm the catalog once the app is idle, so the first search is instant
 (window.requestIdleCallback ?? setTimeout)(() => ensureCatalog());

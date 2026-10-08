@@ -110,3 +110,6 @@ export const photoUrl = (id: string, thumb = false) => {
 };
 /** Full-size photo URL (loaded from IndexedDB on demand on the web) */
 export const fullPhotoUrl = (id: string) => tauri ? Promise.resolve(photoUrl(id)) : webUrl(`${id}.jpg`);
+
+/** Hand the macOS widget a summary of the trips (no-op outside the Mac app built with the widget) */
+export const updateWidget = (data: object) => { if (tauri) invoke('write_widget', { json: JSON.stringify(data) }).catch(() => {}); };

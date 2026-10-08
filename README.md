@@ -11,6 +11,16 @@ Platforms: macOS first, then Android (Samsung), then Windows. Built with [Tauri 
 - **Web / iPhone, no App Store needed:** open <https://fakefirmo.github.io/TravelApp/> in Safari, then tap Share → **Add to Home Screen**. It runs full-screen and works offline. Trips and photos are stored only on that device.
 - **macOS:** download the `.dmg` from the latest [Build run](https://github.com/FAKEFirmo/TravelApp/actions/workflows/build.yml) → *Artifacts*. The app is unsigned, so the first time right-click it and choose **Open**.
 
+## Mac widget (personal use)
+
+A "Travel globe" desktop widget: your visited countries, routes and totals on a globe that turns a little every 10 minutes (macOS widgets can't animate live). It's signed with your own Apple Development certificate (a free Apple ID in Xcode is enough), so it's for your own Mac:
+
+```sh
+npm run widget   # builds the app with the widget, signs it, installs it in /Applications
+```
+
+Then right-click the desktop → **Edit Widgets** → search "Little Prince". Code: `widget/`, `scripts/install-mac-widget.sh`.
+
 ## Develop
 
 Requires Node 22+ and Rust (`rustup`).

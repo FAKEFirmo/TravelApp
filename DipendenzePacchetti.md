@@ -27,6 +27,15 @@ Ora che la build iOS gira su GitHub, questi pacchetti sono stati disinstallati. 
 | `ruby` + `libyaml` (Homebrew) | tentativo di installare CocoaPods | `brew autoremove` |
 | Target Rust iOS: `aarch64-apple-ios`, `aarch64-apple-ios-sim`, `x86_64-apple-ios` | noi e Tauri | `rustup target remove aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios` |
 
+## Widget per Mac (solo uso personale)
+
+| Cosa | Dove | Come rimuoverlo |
+|---|---|---|
+| App installata con il widget (`npm run widget`) | `/Applications/Little Prince.app` | Trascinala nel Cestino |
+| Dati letti dal widget (riepilogo dei viaggi) | `~/Library/Group Containers/36Q73JL7XH.com.littleprince.app` | Si cancella dal Finder (⌘⇧G e incolla il percorso) dopo aver tolto l'app |
+
+Non installa nulla di nuovo: usa Xcode (già presente) e il tuo certificato Apple Development.
+
 ## Dati dell'app e cache
 
 | Cosa | Dove | Come rimuoverlo |

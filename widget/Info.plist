@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key><string>com.littleprince.app.widget</string>
+  <key>CFBundleExecutable</key><string>LittlePrinceWidget</string>
+  <key>CFBundleName</key><string>Little Prince Widget</string>
+  <key>CFBundleDisplayName</key><string>Little Prince</string>
+  <key>CFBundlePackageType</key><string>XPC!</string>
+  <key>CFBundleShortVersionString</key><string>__VERSION__</string>
+  <key>CFBundleVersion</key><string>__VERSION__</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>NSExtension</key>
+  <dict><key>NSExtensionPointIdentifier</key><string>com.apple.widgetkit-extension</string></dict>
+  <!-- Shared folder the app writes widget.json into; filled in by scripts/install-mac-widget.sh -->
+  <key>LPAppGroup</key><string>__GROUP__</string>
+</dict>
+</plist>

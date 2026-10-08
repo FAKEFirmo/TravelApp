@@ -91,6 +91,28 @@ fn export_backup(app: AppHandle, request: Request) -> Result<String, String> {
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Data for the macOS widget (see widget/): written to the App Group folder the widget reads. Only builds made by
+/// scripts/install-mac-widget.sh know the group (LP_APP_GROUP at compile time); everywhere else this does nothing.
+#[tauri::command]
+fn write_widget(json: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    if let Some(group) = option_env!("LP_APP_GROUP") {
+        // macOS creates (and only lets entitled apps use) the group folder through this Foundation call
+        use objc2_foundation::{NSFileManager, NSString};
+        let url = NSFileManager::defaultManager()
+            .containerURLForSecurityApplicationGroupIdentifier(&NSString::from_str(group))
+            .ok_or("no App Group folder: is the app signed with the group entitlement?")?;
+        let dir = PathBuf::from(url.path().ok_or("bad App Group path")?.to_string());
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?; // unsandboxed apps get the path but must create it
+        let tmp = dir.join("widget.json.tmp");
+        fs::write(&tmp, json).map_err(|e| e.to_string())?;
+        fs::rename(&tmp, dir.join("widget.json")).map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = json;
+    Ok(())
+}
+
 #[tauri::command]
 fn photos_dir(app: AppHandle) -> Result<String, String> {
     Ok(data_dir(&app)?.join("photos").to_string_lossy().into_owned())
@@ -99,7 +121,7 @@ fn photos_dir(app: AppHandle) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![load_library, save_library, save_photo, delete_photo, read_photo, export_backup, photos_dir])
+        .invoke_handler(tauri::generate_handler![load_library, save_library, save_photo, delete_photo, read_photo, export_backup, write_widget, photos_dir])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
