@@ -1,12 +1,9 @@
 // The 3D globe: countries, trip arcs, stop + activity markers, camera moves.
 import Globe from 'globe.gl';
-import { TextureLoader, SRGBColorSpace, Group, Mesh, MeshBasicMaterial, LineSegments, LineBasicMaterial, BufferAttribute, Color } from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import ConicPolygonGeometry from 'three-conic-polygon-geometry';
+import { TextureLoader, SRGBColorSpace, Group, Mesh, MeshBasicMaterial, LineSegments, LineBasicMaterial, BufferAttribute, BufferGeometry, Color } from 'three';
 import GeoJsonGeometry from 'three-geojson-geometry';
-import worldUrl from 'world-atlas/countries-50m.json?url';
+import landUrl from './data/land.bin?url';
 import satelliteUrl from './assets/earth-blue-marble.jpg';
-import { countryFeatures } from './world';
 import { MODES, KINDS, km, type Activity, type LegView, type Place, type TripView } from './model';
 import { icon, esc, rgba, fmt } from './ui';
 
@@ -22,7 +19,8 @@ const GRID = [
   ...range(-180, 150, 30).map(lng => range(-90, 90, 3).map(lat => [lng, lat])),
   ...range(-60, 60, 30).map(lat => range(-180, 180, 3).map(lng => [lng, lat])),
 ];
-// Radii (globe radius 100) of the layers above the ocean sphere; gaps sized for the camera's near plane below
+// Radii (globe radius 100) of the layers above the ocean sphere; gaps sized for the camera's near plane below.
+// land and border are baked into land.bin: rerun `npm run land` after changing them
 const R = { grid: 100.1, land: 100.3, border: 100.4 };
 const MARK_ALT = 0.005; // dots and line ends sit just above land and borders (radius 100.5)
 const noRaycast = () => {}; // these layers never need picking: skipping them keeps pointer moves cheap
@@ -30,30 +28,25 @@ const noRaycast = () => {}; // these layers never need picking: skipping them ke
 /**
  * All countries as ONE mesh (+ one line object for borders, one for the grid) instead of ~3 objects per
  * country: 3 draw calls instead of ~720, and nothing to hit-test while dragging. Colours live in a
- * per-vertex buffer so selecting a trip just rewrites numbers.
+ * per-vertex buffer so selecting a trip just rewrites numbers. The shapes come pre-triangulated from
+ * land.bin (scripts/build-land.mjs): triangulating them here took ~10 s on every start.
  */
-function countryLayer(features: any[]) {
-  const ranges: { name: string; start: number; count: number }[] = [];
-  const caps: any[] = [];
-  let vertices = 0;
-  for (const f of features) {
-    const polys: number[][][][] = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
-    const start = vertices;
-    for (const poly of polys) {
-      let g = new ConicPolygonGeometry(poly, 0, R.land, false, true, false, 5);
-      if (g.index) { const flat = g.toNonIndexed(); g.dispose(); g = flat; } // count vertices as merged
-      g.clearGroups();
-      vertices += g.attributes.position.count;
-      caps.push(g);
-    }
-    ranges.push({ name: f.properties.name, start, count: vertices - start });
-  }
-  const land = mergeGeometries(caps);
-  caps.forEach(g => g.dispose());
-  land.setAttribute('color', new BufferAttribute(new Float32Array(land.attributes.position.count * 3), 3));
+function countryLayer(buf: ArrayBuffer) {
+  const hlen = new DataView(buf).getUint32(0, true);
+  const { names, starts, counts, sizes } = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hlen)));
+  let at = 4 + hlen;
+  const [landPos, landIdx, borderPos, borderIdx] = sizes.map((n: number, i: number) => {
+    const a = new (i % 2 ? Uint32Array : Float32Array)(buf, at, n); at += n * 4; return a;
+  });
+  const geometry = (pos: Float32Array, idx: Uint32Array) => {
+    const g = new BufferGeometry(); g.setAttribute('position', new BufferAttribute(pos, 3)); g.setIndex(new BufferAttribute(idx, 1)); return g;
+  };
+  const ranges = names.map((name: string, i: number) => ({ name, start: starts[i], count: counts[i] }));
+  const land = geometry(landPos, landIdx);
+  land.setAttribute('color', new BufferAttribute(new Float32Array(landPos.length), 3));
   const landMesh = new Mesh(land, new MeshBasicMaterial({ vertexColors: true }));
   const borders = new LineSegments(
-    new GeoJsonGeometry({ type: 'MultiPolygon', coordinates: features.flatMap(f => f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates) }, R.border, 5),
+    geometry(borderPos, borderIdx),
     new LineBasicMaterial({ color: STYLE.border, transparent: true, opacity: 0.28 }));
   const grid = new LineSegments(new GeoJsonGeometry({ type: 'MultiLineString', coordinates: GRID }, R.grid, 3),
     new LineBasicMaterial({ color: '#aabeff', transparent: true, opacity: 0.1, depthWrite: false }));
@@ -151,8 +144,8 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
   const fit = () => globe.width(innerWidth).height(innerHeight);
   addEventListener('resize', fit); fit();
 
-  fetch(worldUrl).then(r => r.json()).then((w: any) => {
-    layer = countryLayer(countryFeatures(w));
+  fetch(landUrl).then(r => r.arrayBuffer()).then(buf => {
+    layer = countryLayer(buf);
     paintCountries();
     globe.customLayerData([{}]); // new datum → globe.gl asks customThreeObject for the (now built) layer
   });
