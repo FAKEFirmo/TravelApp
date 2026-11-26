@@ -1,5 +1,5 @@
 // Builds src/data/places.json, the offline place catalog (cities + airports).
-// Sources: GeoNames cities5000 (every place with 5,000+ people, CC BY 4.0) and OurAirports (public domain).
+// Sources: GeoNames cities500 (every place with 500+ people, CC BY 4.0) and OurAirports (public domain).
 // Country names come from the same world-atlas polygons the globe highlights, so they always match.
 // Run: npm run places   (needs internet and the `unzip` command)
 import { writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
@@ -57,7 +57,7 @@ function altNames(name, ascii, alts) {
 
 // geonameid, name, asciiname, alternatenames, lat, lng, class, code, country, cc2, admin1, …, population
 const SKIP = new Set(['PPLX', 'PPLA5', 'PPLH', 'PPLQ', 'PPLW', 'PPLCH']); // city sections, historical, abandoned, destroyed
-const cities = tsv(await unzipText(GEONAMES + 'cities5000.zip'))
+const cities = tsv(await unzipText(GEONAMES + 'cities500.zip'))
   .filter(r => !SKIP.has(r[7]) && !/\d/.test(r[1])) // numbered districts ("Paris 15 Vaugirard") aren't towns
   .map(r => {
     const p = { lat: round(+r[4], 3), lng: round(+r[5], 3) };
