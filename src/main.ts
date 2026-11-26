@@ -804,15 +804,15 @@ function setView(sat: boolean) {
 $('#layers').onclick = () => setView(!satellite);
 
 // ---------- Settings (per device) ----------
-const settings: { mountains: boolean } = { mountains: true };
+const settings: { relief: boolean } = { relief: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('lp-settings') ?? '{}')); } catch { /* defaults */ }
-const setMountains = $<HTMLInputElement>('#setMountains');
-setMountains.checked = settings.mountains;
-globe.mountains(settings.mountains);
-setMountains.onchange = () => {
-  settings.mountains = setMountains.checked;
+const setRelief = $<HTMLInputElement>('#setRelief');
+setRelief.checked = settings.relief;
+globe.relief(settings.relief);
+setRelief.onchange = () => {
+  settings.relief = setRelief.checked;
   try { localStorage.setItem('lp-settings', JSON.stringify(settings)); } catch { /* private mode: not remembered */ }
-  globe.mountains(settings.mountains);
+  globe.relief(settings.relief);
 };
 $('#gear').innerHTML = icon('Settings');
 $('#gear').onclick = () => $<HTMLDialogElement>('#settings').showModal();

@@ -11,7 +11,6 @@
     "test": "node --experimental-strip-types --no-warnings src/model.test.ts",
     "places": "node --experimental-strip-types --no-warnings scripts/build-places.mjs",
     "land": "node --experimental-strip-types --no-warnings scripts/build-land.mjs",
-    "mountains": "node scripts/build-mountains.mjs",
     "widget": "bash scripts/install-mac-widget.sh"
   },
   "dependencies": {

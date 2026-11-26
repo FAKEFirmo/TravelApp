@@ -1,9 +1,9 @@
 // The 3D globe: countries, trip arcs, stop + activity markers, camera moves.
 import Globe from 'globe.gl';
-import { TextureLoader, SRGBColorSpace, Group, Mesh, MeshBasicMaterial, LineSegments, LineBasicMaterial, BufferAttribute, BufferGeometry, Color, CanvasTexture, Points, PointsMaterial } from 'three';
+import { TextureLoader, SRGBColorSpace, Group, Mesh, LineSegments, LineBasicMaterial, BufferAttribute, BufferGeometry, Color, ShaderMaterial, LinearFilter } from 'three';
 import GeoJsonGeometry from 'three-geojson-geometry';
 import landUrl from './data/land.bin?url';
-import mountainsUrl from './data/mountains.json?url';
+import reliefUrl from './data/relief.png';
 import satelliteUrl from './assets/earth-blue-marble.jpg';
 import { MODES, KINDS, km, type Activity, type LegView, type Place, type TripView } from './model';
 import { icon, esc, rgba, fmt } from './ui';
@@ -26,37 +26,78 @@ const R = { grid: 100.1, land: 100.3, border: 100.4 };
 const MARK_ALT = 0.005; // dots and line ends sit just above land and borders (radius 100.5)
 const noRaycast = () => {}; // these layers never need picking: skipping them keeps pointer moves cheap
 
+const RELIEF = 0.0002; // globe units per metre of elevation: ~13× real, so mountains read at globe scale
+
+/**
+ * Land painted like a relief map: the flat stylized country colours, times the hillshade in relief.png
+ * (scripts/build-land.mjs; ~10 km detail, sun from the north-west), fading toward snow on high ground.
+ * The texture is looked up by each pixel's lat/lng, so the mesh needs no texture coordinates.
+ */
+const reliefMaterial = (tex: any) => new ShaderMaterial({
+  vertexColors: true,
+  uniforms: { relief: { value: tex }, on: { value: 0 } },
+  vertexShader: `varying vec3 vColor; varying vec3 vPos;
+    void main() { vColor = color; vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: `uniform sampler2D relief; uniform float on; varying vec3 vColor; varying vec3 vPos;
+    void main() {
+      vec3 p = normalize(vPos);
+      vec4 t = texture2D(relief, vec2(atan(p.x, p.z) / 6.2831853 + 0.5, 0.5 + asin(p.y) / 3.1415927));
+      vec3 col = mix(vColor, vec3(0.86, 0.89, 1.0), smoothstep(0.38, 0.8, t.g) * 0.75 * on);
+      // shadowed slopes darken the colour; sunlit ones also get a pale highlight, so relief shows on dark blue too
+      float shade = mix(1.0, clamp(1.0 + (t.r / 0.7 - 1.0) * 1.9, 0.3, 1.9), on);
+      gl_FragColor = vec4(col * min(shade, 1.0) + max(shade - 1.0, 0.0) * vec3(0.3, 0.33, 0.42), 1.0);
+      #include <colorspace_fragment>
+    }`,
+});
+
 /**
  * All countries as ONE mesh (+ one line object for borders, one for the grid) instead of ~3 objects per
  * country: 3 draw calls instead of ~720, and nothing to hit-test while dragging. Colours live in a
  * per-vertex buffer so selecting a trip just rewrites numbers. The shapes come pre-triangulated from
- * land.bin (scripts/build-land.mjs): triangulating them here took ~10 s on every start.
+ * land.bin (scripts/build-land.mjs), with each vertex's elevation for the terrain relief.
  */
-function countryLayer(buf: ArrayBuffer) {
+function countryLayer(buf: ArrayBuffer, tex: any) {
   const hlen = new DataView(buf).getUint32(0, true);
   const { names, starts, counts, sizes } = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 4, hlen)));
   let at = 4 + hlen;
-  const [landPos, landIdx, borderPos, borderIdx] = sizes.map((n: number, i: number) => {
-    const a = new (i % 2 ? Uint32Array : Float32Array)(buf, at, n); at += n * 4; return a;
+  const types = [Float32Array, Uint32Array, Float32Array, Uint32Array, Int16Array, Int16Array];
+  const [landPos, landIdx, borderPos, borderIdx, landH, borderH] = sizes.map((n: number, i: number) => {
+    const a = new types[i](buf, at, n); at += n * types[i].BYTES_PER_ELEMENT; return a;
+  });
+  /** Positions raised by elevation (each vertex pushed out along its own direction) */
+  const raised = (pos: Float32Array, h: Int16Array) => pos.map((v, i) => {
+    const j = i - i % 3, r = Math.hypot(pos[j], pos[j + 1], pos[j + 2]);
+    return v * (r + h[j / 3] * RELIEF) / r;
   });
   const geometry = (pos: Float32Array, idx: Uint32Array) => {
     const g = new BufferGeometry(); g.setAttribute('position', new BufferAttribute(pos, 3)); g.setIndex(new BufferAttribute(idx, 1)); return g;
   };
   const ranges = names.map((name: string, i: number) => ({ name, start: starts[i], count: counts[i] }));
-  const land = geometry(landPos, landIdx);
+  const land = geometry(landPos, landIdx), borderGeo = geometry(borderPos, borderIdx);
   land.setAttribute('color', new BufferAttribute(new Float32Array(landPos.length), 3));
-  const landMesh = new Mesh(land, new MeshBasicMaterial({ vertexColors: true }));
-  const borders = new LineSegments(
-    geometry(borderPos, borderIdx),
-    new LineBasicMaterial({ color: STYLE.border, transparent: true, opacity: 0.28 }));
+  // Flat and raised versions, built once; the relief switch just swaps which one is drawn
+  const flat = { land: landPos, border: borderPos }, high = { land: raised(landPos, landH), border: raised(borderPos, borderH) };
+  const material = reliefMaterial(tex);
+  const landMesh = new Mesh(land, material);
+  const borders = new LineSegments(borderGeo, new LineBasicMaterial({ color: STYLE.border, transparent: true, opacity: 0.28 }));
   const grid = new LineSegments(new GeoJsonGeometry({ type: 'MultiLineString', coordinates: GRID }, R.grid, 3),
     new LineBasicMaterial({ color: '#aabeff', transparent: true, opacity: 0.1, depthWrite: false }));
   const group = new Group();
   group.add(grid, landMesh, borders);
   for (const o of [landMesh, borders, grid]) o.raycast = noRaycast;
   const c = new Color(), colors = land.attributes.color;
+  let relief = false;
   return {
     group,
+    relief(on: boolean) {
+      material.uniforms.on.value = on && tex.image ? 1 : 0; // shading waits for the texture
+      if (on === relief) return;
+      relief = on;
+      const v = on ? high : flat;
+      land.setAttribute('position', new BufferAttribute(v.land, 3));
+      borderGeo.setAttribute('position', new BufferAttribute(v.border, 3));
+      land.computeBoundingSphere(); borderGeo.computeBoundingSphere();
+    },
     paint(visited: Set<string>, sat: boolean) {
       landMesh.visible = grid.visible = !sat;
       borders.material.opacity = sat ? 0.18 : 0.28;
@@ -70,32 +111,6 @@ function countryLayer(buf: ArrayBuffer) {
 }
 const rad = (d: number) => d * Math.PI / 180;
 
-/**
- * Storybook mountains: a little peak symbol (drawn once on a canvas) at each point in mountains.json
- * (scripts/build-mountains.mjs). Points always face the screen, so the camera looking straight down still sees
- * upright peaks, like on a hand-drawn map. Three sizes by height = three draw calls for ~3,800 peaks.
- */
-function mountainLayer(peaks: [number, number, number][], at: (lat: number, lng: number) => any) {
-  const c = document.createElement('canvas'); c.width = c.height = 64;
-  const g = c.getContext('2d')!;
-  const peak = (x: number, w: number, h: number, light: string, dark: string) => {
-    g.fillStyle = dark; g.beginPath(); g.moveTo(x - w, 60); g.lineTo(x, 60 - h); g.lineTo(x + w, 60); g.fill();
-    g.fillStyle = light; g.beginPath(); g.moveTo(x - w, 60); g.lineTo(x, 60 - h); g.lineTo(x - w * 0.15, 60); g.fill(); // lit side
-    g.fillStyle = '#f4f6ff'; g.beginPath(); g.moveTo(x - w * 0.3, 60 - h * 0.7); g.lineTo(x, 60 - h); g.lineTo(x + w * 0.3, 60 - h * 0.7);
-    g.lineTo(x + w * 0.1, 60 - h * 0.62); g.lineTo(x - w * 0.05, 60 - h * 0.72); g.fill(); // snow cap
-  };
-  peak(42, 16, 30, '#7d93cc', '#4e66a6'); peak(26, 22, 46, '#8ea3d8', '#566fb0');
-  const tex = new CanvasTexture(c); tex.colorSpace = SRGBColorSpace;
-  const group = new Group();
-  for (const [min, max, size] of [[0.85, 2, 5.5], [0.7, 0.85, 4.4], [0, 0.7, 3.4]]) {
-    const pts = peaks.filter(p => p[2] >= min && p[2] < max).flatMap(([lat, lng]) => { const v = at(lat, lng); return [v.x, v.y, v.z]; });
-    const geo = new BufferGeometry(); geo.setAttribute('position', new BufferAttribute(new Float32Array(pts), 3));
-    const o = new Points(geo, new PointsMaterial({ map: tex, size, transparent: true, alphaTest: 0.3, depthWrite: false }));
-    o.raycast = noRaycast;
-    group.add(o);
-  }
-  return group;
-}
 
 /** Spherical mean of points → camera target that fits them (handles the antimeridian) */
 export function centre(points: { lat: number; lng: number }[], min = 0.35) {
@@ -113,7 +128,7 @@ export function centre(points: { lat: number; lng: number }[], min = 0.35) {
 type Mark = { lat: number; lng: number; p?: Place; label?: boolean; a?: Activity; more?: number };
 
 export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeEvents) {
-  let sat = false, wantMountains = false, mountains: any = null, lastAlt = 2.4, satTex: any = null, layer: ReturnType<typeof countryLayer> | null = null, zoomTimer = 0;
+  let sat = false, wantRelief = false, lastAlt = 2.4, satTex: any = null, layer: ReturnType<typeof countryLayer> | null = null, zoomTimer = 0;
   const s = state;
   const paintCountries = () => { const { current, visited } = s(); layer?.paint(current ? current.countries : visited, sat); };
   const arcColor = (l: any) => {
@@ -174,8 +189,11 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
   const fit = () => globe.width(innerWidth).height(innerHeight);
   addEventListener('resize', fit); fit();
 
+  // The relief texture fills in when it arrives; the land shows flat until then
+  const reliefTex = new TextureLoader().load(reliefUrl, () => layer?.relief(wantRelief));
+  reliefTex.generateMipmaps = false; reliefTex.minFilter = LinearFilter; // no mipmaps: they'd draw a seam at the date line
   fetch(landUrl).then(r => r.arrayBuffer()).then(buf => {
-    layer = countryLayer(buf);
+    layer = countryLayer(buf, reliefTex); layer.relief(wantRelief);
     paintCountries();
     globe.customLayerData([{}]); // new datum → globe.gl asks customThreeObject for the (now built) layer
   });
@@ -224,16 +242,8 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       globe.arcColor(arcColor);
       globe.pointOfView(centre(points, min), 1000);
     },
-    /** Show or hide the mountain ranges (the data loads the first time they're shown) */
-    async mountains(on: boolean) {
-      wantMountains = on;
-      if (on && !mountains) {
-        const peaks = await (await fetch(mountainsUrl)).json();
-        mountains ??= mountainLayer(peaks, (lat, lng) => { return globe.getCoords(lat, lng, 0.008); });
-        globe.scene().add(mountains);
-      }
-      if (mountains) mountains.visible = wantMountains && !sat;
-    },
+    /** Terrain relief on/off (mountains raised and shaded) */
+    relief(on: boolean) { wantRelief = on; layer?.relief(on); paintCountries(); },
     /** Shift the globe vertically (px) so it stays centred in the area a bottom sheet leaves free */
     offset(y: number) { globe.globeOffset([0, y]); },
     satellite(on: boolean) {
@@ -244,7 +254,6 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       mat.map = on ? satTex : null; mat.needsUpdate = true;
       paintCountries();
       paint();
-      if (mountains) mountains.visible = wantMountains && !on; // the satellite photo already shows the relief
     },
   };
 }

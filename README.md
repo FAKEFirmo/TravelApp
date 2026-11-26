@@ -64,4 +64,4 @@ Back up that folder to back up everything, or use the in-app **Backup** page (pu
 npm run places
 ```
 
-Country shapes come from `world-atlas` (Natural Earth), pre-triangulated into `src/data/land.bin` by `npm run land`. Mountain ranges come from Natural Earth's geography regions (public domain), baked into `src/data/mountains.json` by `npm run mountains`. The satellite texture is NASA Blue Marble (public domain). Icons are from [Lucide](https://lucide.dev).
+Country shapes come from `world-atlas` (Natural Earth), pre-triangulated into `src/data/land.bin` by `npm run land`. Terrain relief uses elevation from [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen; SRTM, GMTED2010, ETOPO1 and others), baked into the same file; `npm run land` downloads the tiles once and caches them in `node_modules/.cache/terrain`. The satellite texture is NASA Blue Marble (public domain). Icons are from [Lucide](https://lucide.dev).
