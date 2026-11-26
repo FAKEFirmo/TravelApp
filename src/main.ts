@@ -388,20 +388,24 @@ const known = new Map<string, Place>(); // catalog + every place already used in
 let index: { p: Place; n: string; alt: string }[] = [];
 const byIata = new Map<string, Place>();
 // First two letters of every word (any language) → index positions, in size order. A query only looks at the
-// places one of whose words starts like it, instead of scanning all ~67k.
+// places one of whose words starts like it, instead of scanning all ~230k.
 const byStart = new Map<string, number[]>();
-const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+// Accents fold away with NFD, but letters like ł, ø, ß are separate letters in Unicode: map them by hand
+const LETTERS: Record<string, string> = { ł: 'l', đ: 'd', ð: 'd', ø: 'o', ı: 'i', ß: 'ss', æ: 'ae', œ: 'oe', þ: 'th', ħ: 'h' };
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[łđðøıßæœþħ]/g, c => LETTERS[c]);
 const label = (p: Place) => p.name + (p.iata ? ` (${p.iata})` : '');
 
 // Loaded on first use (only the trip form needs it), so it doesn't slow down startup
 let catalog: Promise<void> | null = null;
 const ensureCatalog = () => catalog ??= loadCatalog().catch(e => { catalog = null; showError(`Could not load the place catalog: ${e}`); });
 async function loadCatalog() {
-  const rows: [string, string, string, number, number, number, string, string, string, string][] = await (await fetch(placesUrl)).json();
-  const byId = new Map(rows.map(([id, name, country, lat, lng, , iata, , region]) =>
-    [id, { id, name, country, lat, lng, ...(iata && { iata }), ...(region && { region }) } as Place]));
-  for (const [id, , , , , , , city] of rows) if (city) byId.get(id)!.city = byId.get(city);
-  const rank = new Map(rows.map(r => [r[0], r[5]])), alts = new Map(rows.map(r => [r[0], r[9]]));
+  type Row = [number | string, string, number, number, number, number, string?, number?, number?, string?];
+  const { countries, regions, rows }: { countries: string[]; regions: string[]; rows: Row[] } = await (await fetch(placesUrl)).json();
+  for (const r of rows) r[0] = typeof r[0] === 'number' ? 'g' + r[0] : r[0]; // cities are stored as bare GeoNames ids
+  const byId = new Map(rows.map(([id, name, c, lat, lng, , iata, , region]) =>
+    [id as string, { id, name, country: countries[c], lat, lng, ...(iata && { iata }), ...(region && { region: regions[region] }) } as Place]));
+  for (const [id, , , , , , , city] of rows) if (city) byId.get(id as string)!.city = byId.get('g' + city);
+  const rank = new Map(rows.map(r => [r[0] as string, r[5]])), alts = new Map(rows.map(r => [r[0] as string, r[9]]));
   // Cities by population first, then airports (large before medium): search scans in this order
   index = [...byId.values()].sort((a, b) => +!!a.iata - +!!b.iata || rank.get(b.id)! - rank.get(a.id)!).map(p => ({
     p,

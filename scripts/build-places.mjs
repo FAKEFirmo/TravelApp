@@ -115,8 +115,17 @@ const airports = parseCsv(await text(AIRPORTS))
       country: city?.country ?? polygonCountry(p) ?? fallback(p, a.iso_country), rank: a.type === 'large_airport' ? 2 : 1 };
   });
 
-// Compact rows: [id, name, country, lat, lng, rank, iata, cityId, region, otherNames ('|'-separated)]
-const rows = [...cities, ...airports].map(p => [p.id, p.name, p.country, p.lat, p.lng, p.rank, p.iata ?? '', p.city ?? '', p.region ?? '', p.alt ?? '']);
+// Compact rows: [id, name, country#, lat, lng, rank, iata, cityId, region#, otherNames ('|'-separated)], with country
+// and region names stored once in lookup tables and empty trailing fields dropped (about half the size)
+const all = [...cities, ...airports];
+const countryNames = [...new Set(all.map(p => p.country))], regionNames = ['', ...new Set(all.map(p => p.region).filter(Boolean))];
+const ci = new Map(countryNames.map((c, i) => [c, i])), ri = new Map(regionNames.map((r, i) => [r, i]));
+const rows = all.map(p => {
+  const r = [p.id.startsWith('g') ? +p.id.slice(1) : p.id, p.name, ci.get(p.country), round(p.lat, 2), round(p.lng, 2), p.rank,
+    p.iata ?? '', p.city ? +p.city.slice(1) : '', ri.get(p.region ?? ''), p.alt ?? ''];
+  while (r.at(-1) === '' || r.at(-1) === 0 && r.length > 6) r.pop();
+  return r;
+});
 mkdirSync('src/data', { recursive: true });
-writeFileSync('src/data/places.json', JSON.stringify(rows));
+writeFileSync('src/data/places.json', JSON.stringify({ countries: countryNames, regions: regionNames, rows }));
 console.log(`${cities.length} cities, ${airports.length} airports`);
