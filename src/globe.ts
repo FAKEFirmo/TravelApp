@@ -26,7 +26,7 @@ const R = { grid: 100.1, land: 100.3, border: 100.4 };
 const MARK_ALT = 0.005; // dots and line ends sit just above land and borders (radius 100.5)
 const noRaycast = () => {}; // these layers never need picking: skipping them keeps pointer moves cheap
 
-const RELIEF = 0.0002; // globe units per metre of elevation: ~13× real, so mountains read at globe scale
+const RELIEF = 0.0007; // globe units per metre of elevation: ~45× real, so ranges stand out on the globe's edge
 
 /**
  * Land painted like a relief map: the flat stylized country colours, times the hillshade in relief.png
@@ -42,7 +42,7 @@ const reliefMaterial = (tex: any) => new ShaderMaterial({
     void main() {
       vec3 p = normalize(vPos);
       vec4 t = texture2D(relief, vec2(atan(p.x, p.z) / 6.2831853 + 0.5, 0.5 + asin(p.y) / 3.1415927));
-      vec3 col = mix(vColor, vec3(0.86, 0.89, 1.0), smoothstep(0.38, 0.8, t.g) * 0.75 * on);
+      vec3 col = mix(vColor, vec3(0.86, 0.89, 1.0), smoothstep(0.78, 0.97, t.g) * 0.6 * on);
       // shadowed slopes darken the colour; sunlit ones also get a pale highlight, so relief shows on dark blue too
       float shade = mix(1.0, clamp(1.0 + (t.r / 0.7 - 1.0) * 1.9, 0.3, 1.9), on);
       gl_FragColor = vec4(col * min(shade, 1.0) + max(shade - 1.0, 0.0) * vec3(0.3, 0.33, 0.42), 1.0);
@@ -145,10 +145,10 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
     .arcColor(arcColor)
     .arcAltitudeAutoScale(0.4)
     // Start/end at the dots' height: on the bare surface the last bit of each line hid under the raised land
-    .arcStartAltitude(MARK_ALT).arcEndAltitude(MARK_ALT)
+    .arcStartAltitude((l: any) => MARK_ALT + lift(l.from.lat, l.from.lng)).arcEndAltitude((l: any) => MARK_ALT + lift(l.to.lat, l.to.lng))
     .arcLabel((l: any) => `${icon(MODES[l.mode as keyof typeof MODES].icon)} <b>${esc(l.from.name)} → ${esc(l.to.name)}</b><br>${esc(l.trip.name)} · ${fmt(l.km)} km`)
     .onArcClick((l: any) => { const t = s().trips.find(t => t.trip === l.trip); if (t) on.trip(t); })
-    .htmlLat('lat').htmlLng('lng').htmlAltitude(MARK_ALT).htmlTransitionDuration(0)
+    .htmlLat('lat').htmlLng('lng').htmlAltitude((m: any) => MARK_ALT + lift(m.lat, m.lng)).htmlTransitionDuration(0)
     .htmlElement((d: object) => {
       const m = d as Mark, el = document.createElement('div');
       if (m.a) {
@@ -190,7 +190,24 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
   addEventListener('resize', fit); fit();
 
   // The relief texture fills in when it arrives; the land shows flat until then
-  const reliefTex = new TextureLoader().load(reliefUrl, () => layer?.relief(wantRelief));
+  // Ground height for dots and line ends, so they sit on the raised terrain: read once from relief.png's
+  // elevation channel at half resolution (~20 km, about the mesh's own detail)
+  let ground: Uint8ClampedArray | null = null;
+  const GW = 2048, GH = 1024;
+  const lift = (lat: number, lng: number) => {
+    if (!ground || !wantRelief) return 0;
+    const x = Math.min(GW - 1, Math.floor((lng + 180) / 360 * GW)), y = Math.min(GH - 1, Math.floor((90 - lat) / 180 * GH));
+    return ground[(y * GW + x) * 4 + 1] / 255 * 6000 * RELIEF / 100; // metres → globe altitude units (radius 100)
+  };
+  const reliefTex = new TextureLoader().load(reliefUrl, (t: any) => {
+    const c = document.createElement('canvas'); c.width = GW; c.height = GH;
+    const g = c.getContext('2d', { willReadFrequently: true })!;
+    g.drawImage(t.image, 0, 0, GW, GH);
+    ground = g.getImageData(0, 0, GW, GH).data;
+    layer?.relief(wantRelief); restack();
+  });
+  /** Re-place dots and arc ends after the terrain changed (height data arrived, relief switched) */
+  function restack() { globe.arcsData([...globe.arcsData()]); scale(lastAlt, true); }
   reliefTex.generateMipmaps = false; reliefTex.minFilter = LinearFilter; // no mipmaps: they'd draw a seam at the date line
   fetch(landUrl).then(r => r.arrayBuffer()).then(buf => {
     layer = countryLayer(buf, reliefTex); layer.relief(wantRelief);
@@ -243,7 +260,7 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       globe.pointOfView(centre(points, min), 1000);
     },
     /** Terrain relief on/off (mountains raised and shaded) */
-    relief(on: boolean) { wantRelief = on; layer?.relief(on); paintCountries(); },
+    relief(on: boolean) { wantRelief = on; layer?.relief(on); paintCountries(); restack(); },
     /** Shift the globe vertically (px) so it stays centred in the area a bottom sheet leaves free */
     offset(y: number) { globe.globeOffset([0, y]); },
     satellite(on: boolean) {
