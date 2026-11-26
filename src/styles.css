@@ -193,14 +193,14 @@ select { font: inherit; color: var(--text); background: rgba(255,255,255,.06); b
     background: var(--panel); }
   footer, .views, .legend, .hint { display: none; }
   /* Forms become full-screen sheets with Cancel / Save on top */
-  dialog:not(#lightbox):not(#ask) { width: 100%; max-width: none; height: calc(100% - env(safe-area-inset-top) - 12px);
+  dialog:not(#lightbox):not(.small) { width: 100%; max-width: none; height: calc(100% - env(safe-area-inset-top) - 12px);
     max-height: none; margin: auto 0 0; border-radius: 16px 16px 0 0; }
   dialog form { position: relative; padding-bottom: calc(env(safe-area-inset-bottom) + 18px); }
-  dialog:not(#ask) form .actions { order: -1; margin: -4px 0 4px; justify-content: space-between; }
-  dialog:not(#ask) form .actions button { flex: none; background: none; border: 0; padding: 6px 2px; color: var(--gold); }
-  dialog:not(#ask) form .actions .primary { font-weight: 700; }
-  dialog:not(#ask) h3 { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); font-size: 15px; white-space: nowrap; }
-  dialog:not(#ask) h3 small { display: none; }
+  dialog:not(.small) form .actions { order: -1; margin: -4px 0 4px; justify-content: space-between; }
+  dialog:not(.small) form .actions button { flex: none; background: none; border: 0; padding: 6px 2px; color: var(--gold); }
+  dialog:not(.small) form .actions .primary { font-weight: 700; }
+  dialog:not(.small) h3 { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); font-size: 15px; white-space: nowrap; }
+  dialog:not(.small) h3 small { display: none; }
 }
 
 /* Swipe-to-reveal rows */
@@ -256,6 +256,27 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .bk .m, .tip { margin: 0; color: var(--muted); font-size: 12px; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .check input { width: auto; }
+.check small { display: block; color: var(--muted); font-size: 12px; }
+/* Settings: gear under the map-style control */
+.gear { position: fixed; top: calc(var(--st) + 48px); right: var(--sr); display: grid; place-items: center; width: 40px; height: 40px;
+  padding: 0; border-radius: 12px; background: var(--panel); }
+.gear svg.lucide { margin: 0; width: 18px; height: 18px; }
+#settings .actions, #statsDlg form .actions { justify-content: flex-end; }
+/* Stats: tap the numbers in the header */
+#stats { cursor: pointer; }
+.sx { width: 100%; border-collapse: collapse; font-size: 13px; }
+.sx th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; padding: 0 6px 6px 0; }
+.sx td { padding: 7px 6px 7px 0; border-top: 1px solid var(--line); }
+.sx td.r, .sx th.r { text-align: right; padding-right: 0; }
+.switch { justify-content: space-between; gap: 16px; font-size: 14px; }
+.switch input { appearance: none; position: relative; flex: none; width: 44px; height: 26px; margin: 0; border-radius: 13px;
+  background: #3a4270; border: 0; transition: background .2s; cursor: pointer; }
+.switch input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; transition: transform .2s cubic-bezier(.2,.8,.2,1); }
+.switch input:checked { background: var(--gold); }
+.switch input:checked::after { transform: translateX(18px); }
+.switch input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.sh2 { margin: 14px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
 #bkSummary { margin: 4px 0; font-size: 13px; }
 .desk-only { display: none; }
 @media (pointer: fine) { .desk-only { display: inline; } }

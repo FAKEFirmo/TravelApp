@@ -1,8 +1,9 @@
 // The 3D globe: countries, trip arcs, stop + activity markers, camera moves.
 import Globe from 'globe.gl';
-import { TextureLoader, SRGBColorSpace, Group, Mesh, MeshBasicMaterial, LineSegments, LineBasicMaterial, BufferAttribute, BufferGeometry, Color } from 'three';
+import { TextureLoader, SRGBColorSpace, Group, Mesh, MeshBasicMaterial, LineSegments, LineBasicMaterial, BufferAttribute, BufferGeometry, Color, CanvasTexture, Points, PointsMaterial } from 'three';
 import GeoJsonGeometry from 'three-geojson-geometry';
 import landUrl from './data/land.bin?url';
+import mountainsUrl from './data/mountains.json?url';
 import satelliteUrl from './assets/earth-blue-marble.jpg';
 import { MODES, KINDS, km, type Activity, type LegView, type Place, type TripView } from './model';
 import { icon, esc, rgba, fmt } from './ui';
@@ -69,6 +70,33 @@ function countryLayer(buf: ArrayBuffer) {
 }
 const rad = (d: number) => d * Math.PI / 180;
 
+/**
+ * Storybook mountains: a little peak symbol (drawn once on a canvas) at each point in mountains.json
+ * (scripts/build-mountains.mjs). Points always face the screen, so the camera looking straight down still sees
+ * upright peaks, like on a hand-drawn map. Three sizes by height = three draw calls for ~3,800 peaks.
+ */
+function mountainLayer(peaks: [number, number, number][], at: (lat: number, lng: number) => any) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const peak = (x: number, w: number, h: number, light: string, dark: string) => {
+    g.fillStyle = dark; g.beginPath(); g.moveTo(x - w, 60); g.lineTo(x, 60 - h); g.lineTo(x + w, 60); g.fill();
+    g.fillStyle = light; g.beginPath(); g.moveTo(x - w, 60); g.lineTo(x, 60 - h); g.lineTo(x - w * 0.15, 60); g.fill(); // lit side
+    g.fillStyle = '#f4f6ff'; g.beginPath(); g.moveTo(x - w * 0.3, 60 - h * 0.7); g.lineTo(x, 60 - h); g.lineTo(x + w * 0.3, 60 - h * 0.7);
+    g.lineTo(x + w * 0.1, 60 - h * 0.62); g.lineTo(x - w * 0.05, 60 - h * 0.72); g.fill(); // snow cap
+  };
+  peak(42, 16, 30, '#7d93cc', '#4e66a6'); peak(26, 22, 46, '#8ea3d8', '#566fb0');
+  const tex = new CanvasTexture(c); tex.colorSpace = SRGBColorSpace;
+  const group = new Group();
+  for (const [min, max, size] of [[0.85, 2, 5.5], [0.7, 0.85, 4.4], [0, 0.7, 3.4]]) {
+    const pts = peaks.filter(p => p[2] >= min && p[2] < max).flatMap(([lat, lng]) => { const v = at(lat, lng); return [v.x, v.y, v.z]; });
+    const geo = new BufferGeometry(); geo.setAttribute('position', new BufferAttribute(new Float32Array(pts), 3));
+    const o = new Points(geo, new PointsMaterial({ map: tex, size, transparent: true, alphaTest: 0.3, depthWrite: false }));
+    o.raycast = noRaycast;
+    group.add(o);
+  }
+  return group;
+}
+
 /** Spherical mean of points → camera target that fits them (handles the antimeridian) */
 export function centre(points: { lat: number; lng: number }[], min = 0.35) {
   let x = 0, y = 0, z = 0;
@@ -85,7 +113,7 @@ export function centre(points: { lat: number; lng: number }[], min = 0.35) {
 type Mark = { lat: number; lng: number; p?: Place; label?: boolean; a?: Activity; more?: number };
 
 export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeEvents) {
-  let sat = false, lastAlt = 2.4, satTex: any = null, layer: ReturnType<typeof countryLayer> | null = null, zoomTimer = 0;
+  let sat = false, wantMountains = false, mountains: any = null, lastAlt = 2.4, satTex: any = null, layer: ReturnType<typeof countryLayer> | null = null, zoomTimer = 0;
   const s = state;
   const paintCountries = () => { const { current, visited } = s(); layer?.paint(current ? current.countries : visited, sat); };
   const arcColor = (l: any) => {
@@ -196,6 +224,16 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       globe.arcColor(arcColor);
       globe.pointOfView(centre(points, min), 1000);
     },
+    /** Show or hide the mountain ranges (the data loads the first time they're shown) */
+    async mountains(on: boolean) {
+      wantMountains = on;
+      if (on && !mountains) {
+        const peaks = await (await fetch(mountainsUrl)).json();
+        mountains ??= mountainLayer(peaks, (lat, lng) => { return globe.getCoords(lat, lng, 0.008); });
+        globe.scene().add(mountains);
+      }
+      if (mountains) mountains.visible = wantMountains && !sat;
+    },
     /** Shift the globe vertically (px) so it stays centred in the area a bottom sheet leaves free */
     offset(y: number) { globe.globeOffset([0, y]); },
     satellite(on: boolean) {
@@ -206,6 +244,7 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
       mat.map = on ? satTex : null; mat.needsUpdate = true;
       paintCountries();
       paint();
+      if (mountains) mountains.visible = wantMountains && !on; // the satellite photo already shows the relief
     },
   };
 }

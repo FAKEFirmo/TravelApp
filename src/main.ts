@@ -348,7 +348,7 @@ function sheet(d: Detent) {
 {
   let y0 = 0, start = 0, dragging = false;
   const down = (e: PointerEvent) => {
-    if ((e.target as Element).closest('input, button') || !phone.matches) return;
+    if ((e.target as Element).closest('input, button, #stats') || !phone.matches) return;
     dragging = true; y0 = e.clientY; start = detentY(detent);
     aside.classList.add('dragging');
   };
@@ -558,11 +558,23 @@ legRows.addEventListener('pointerdown', e => {
   const row = grip.closest('.leg-edit')!;
   grip.setPointerCapture(e.pointerId);
   row.classList.add('dragging');
-  const move = (ev: PointerEvent) => {
-    const after = [...legRows.children].find(r => r !== row && ev.clientY < r.getBoundingClientRect().top + r.getBoundingClientRect().height / 2);
+  // Near the top or bottom edge of the form, keep scrolling while the finger stays there
+  const box = row.closest('dialog')!;
+  let y = e.clientY, raf = 0;
+  const place = () => {
+    const after = [...legRows.children].find(r => r !== row && y < r.getBoundingClientRect().top + r.getBoundingClientRect().height / 2);
     if (after !== row.nextElementSibling) legRows.insertBefore(row, after ?? null);
   };
+  const tick = () => {
+    const r = box.getBoundingClientRect(), EDGE = 70;
+    const v = y < r.top + EDGE ? -(r.top + EDGE - y) : y > r.bottom - EDGE ? y - (r.bottom - EDGE) : 0;
+    if (v) { box.scrollTop += v / 4; place(); }
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  const move = (ev: PointerEvent) => { y = ev.clientY; place(); };
   const up = () => {
+    cancelAnimationFrame(raf);
     grip.removeEventListener('pointermove', move as EventListener);
     row.classList.remove('dragging');
     const d = field(row, 'date'), prev = row.previousElementSibling, next = row.nextElementSibling;
@@ -790,6 +802,47 @@ function setView(sat: boolean) {
   globe.satellite(sat);
 }
 $('#layers').onclick = () => setView(!satellite);
+
+// ---------- Settings (per device) ----------
+const settings: { mountains: boolean } = { mountains: true };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('lp-settings') ?? '{}')); } catch { /* defaults */ }
+const setMountains = $<HTMLInputElement>('#setMountains');
+setMountains.checked = settings.mountains;
+globe.mountains(settings.mountains);
+setMountains.onchange = () => {
+  settings.mountains = setMountains.checked;
+  try { localStorage.setItem('lp-settings', JSON.stringify(settings)); } catch { /* private mode: not remembered */ }
+  globe.mountains(settings.mountains);
+};
+$('#gear').innerHTML = icon('Settings');
+$('#gear').onclick = () => $<HTMLDialogElement>('#settings').showModal();
+
+// ---------- Stats: tap the numbers in the header ----------
+function renderStats() {
+  const years = new Map<string, { trips: Set<Trip>; km: number; countries: Set<string> }>();
+  const first = new Map<string, string>(), tripsIn = new Map<string, number>();
+  for (const t of trips) {
+    for (const l of t.legs) {
+      const y = years.get(l.date.slice(0, 4)) ?? years.set(l.date.slice(0, 4), { trips: new Set(), km: 0, countries: new Set() }).get(l.date.slice(0, 4))!;
+      y.trips.add(t.trip); y.km += l.km;
+      for (const p of [l.from, l.to]) {
+        y.countries.add(p.country);
+        if (!first.has(p.country) || l.date < first.get(p.country)!) first.set(p.country, l.date);
+      }
+    }
+    for (const c of t.countries) tripsIn.set(c, (tripsIn.get(c) ?? 0) + 1);
+  }
+  if (!trips.length) return `<p class="m">Add a trip to see your stats.</p>`;
+  const rows = [...years].sort((a, b) => b[0].localeCompare(a[0]));
+  const countries = [...first].sort((a, b) => a[1].localeCompare(b[1]));
+  return `<table class="sx"><tr><th>Year</th><th class="r">Trips</th><th class="r">Countries</th><th class="r">km</th></tr>${
+    rows.map(([y, v]) => `<tr><td>${y}</td><td class="r">${v.trips.size}</td><td class="r">${v.countries.size}</td><td class="r">${fmt(v.km)}</td></tr>`).join('')}</table>
+    <p class="sh2">Countries · ${countries.length}</p>
+    <table class="sx"><tr><th>Country</th><th>First visit</th><th class="r">Trips</th></tr>${
+    countries.map(([c, d]) => `<tr><td>${esc(c)}</td><td>${dfmt(d, { day: 'numeric', month: 'short', year: 'numeric' })}</td><td class="r">${tripsIn.get(c) ?? 0}</td></tr>`).join('')}</table>`;
+}
+$('#stats').title = 'Your travels by year and country';
+$('#stats').onclick = () => { $('#statsBody').innerHTML = renderStats(); $<HTMLDialogElement>('#statsDlg').showModal(); };
 
 // Static starfield behind the globe
 function stars() {

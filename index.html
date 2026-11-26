@@ -38,6 +38,7 @@
     <button data-view="satellite">Satellite</button>
   </div>
   <button class="layers" id="layers" title="Map style"></button>
+  <button class="gear" id="gear" title="Settings"></button>
   <div class="legend" id="legend"></div>
   <div class="hint">Click an arc, a dot or a trip · swipe a trip left to delete · Esc for overview · <span class="kbd">⌘B</span> backup</div>
 
@@ -87,7 +88,19 @@
     <div class="actions"><button value="cancel">Close</button></div>
   </form></dialog>
 
-  <dialog id="ask"><form method="dialog">
+  <dialog id="settings" class="small"><form method="dialog">
+    <h3>Settings</h3>
+    <label class="check switch"><span>Mountain ranges<small>Little peaks on the world's main ranges</small></span><input type="checkbox" role="switch" id="setMountains"></label>
+    <div class="actions"><button class="primary" value="ok">Done</button></div>
+  </form></dialog>
+
+  <dialog id="statsDlg"><form method="dialog">
+    <h3>Your travels</h3>
+    <div id="statsBody"></div>
+    <div class="actions"><button class="primary" value="ok">Done</button></div>
+  </form></dialog>
+
+  <dialog id="ask" class="small"><form method="dialog">
     <p></p>
     <div class="actions"><button value="cancel">Cancel</button><button class="danger" value="ok">Delete</button></div>
   </form></dialog>

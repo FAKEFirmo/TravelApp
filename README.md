@@ -58,10 +58,10 @@ Back up that folder to back up everything, or use the in-app **Backup** page (pu
 
 ## Place catalog
 
-`src/data/places.json` is generated from [GeoNames](https://www.geonames.org) `cities500` (about 226,000 places with 500+ inhabitants, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) and [OurAirports](https://ourairports.com/data/) (public domain). Each airport is linked to the city it serves, and each place's country comes from the same `world-atlas` polygons the globe draws. To regenerate it (needs internet and `unzip`):
+`src/data/places.json` is generated from [GeoNames](https://www.geonames.org) `cities500` (about 226,000 places with 500+ inhabitants, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)) and [OurAirports](https://ourairports.com/data/) (public domain). Each airport is linked to the city it serves, and each place's country is named like the `world-atlas` polygons the globe draws. To regenerate it (needs internet and `unzip`):
 
 ```sh
 npm run places
 ```
 
-Country shapes come from `world-atlas` (Natural Earth). The satellite texture is NASA Blue Marble (public domain). Icons are from [Lucide](https://lucide.dev).
+Country shapes come from `world-atlas` (Natural Earth), pre-triangulated into `src/data/land.bin` by `npm run land`. Mountain ranges come from Natural Earth's geography regions (public domain), baked into `src/data/mountains.json` by `npm run mountains`. The satellite texture is NASA Blue Marble (public domain). Icons are from [Lucide](https://lucide.dev).
