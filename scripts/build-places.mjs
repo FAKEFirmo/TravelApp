@@ -75,7 +75,9 @@ const isoName = Object.fromEntries(Object.entries(votes).map(([iso, v]) => [iso,
 const SMALL = { CC: 'Cocos (Keeling) Islands', CX: 'Christmas Island', GI: 'Gibraltar', MC: 'Monaco', MO: 'Macao',
   PN: 'Pitcairn Islands', TK: 'Tokelau', TV: 'Tuvalu', UM: 'U.S. Minor Outlying Islands' };
 const fallback = (p, iso) => isCrimea(p.lng, p.lat) ? 'Ukraine' : isoName[iso] ?? SMALL[iso] ?? iso;
-for (const c of cities) c.country ??= fallback(c, c.iso);
+// Every city takes its country from its GeoNames country code (named like the globe's polygons via the vote above):
+// the coarse 1:50m outline alone put border towns like Petrovice u Karviné (Czechia) into Poland
+for (const c of cities) c.country = fallback(c, c.iso);
 
 // 1° grid of cities, so linking airports only looks at nearby ones
 const grid = new Map();

@@ -119,6 +119,9 @@ input:focus, textarea:focus { outline: 2px solid rgba(255,209,102,.5); outline-o
 .chips label:has(:checked) { color: var(--gold); border-color: rgba(255,209,102,.5); background: rgba(255,209,102,.1); }
 .chips label:has(:focus-visible), .drop:has(:focus-visible) { outline: 2px solid var(--gold); }
 .chips input, .drop input { position: absolute; opacity: 0; width: 0; height: 0; }
+.grip { flex: none; display: grid; place-items: center; width: 24px; height: 30px; margin-right: -2px; color: var(--muted);
+  cursor: grab; touch-action: none; }
+.leg-edit.dragging { opacity: .85; border-color: rgba(255,209,102,.5); box-shadow: 0 8px 24px rgba(0,0,0,.4); position: relative; z-index: 1; }
 .rm { flex: none; margin-left: auto; width: 30px; height: 30px; padding: 0; border-radius: 50%; }
 .rm svg.lucide, .add-leg svg.lucide { margin: 0 6px 0 0; }
 .rm svg.lucide { margin: 0; }
@@ -183,7 +186,8 @@ select { font: inherit; color: var(--text); background: rgba(255,255,255,.06); b
   .grab { display: block; flex: none; padding: 8px 0 2px; cursor: grab; touch-action: none; }
   .grab i { display: block; width: 36px; height: 5px; margin: 0 auto; border-radius: 3px; background: #4a5280; }
   header { padding-top: 4px; touch-action: none; }
-  .list { padding-bottom: calc(env(safe-area-inset-bottom) + 12px); }
+  /* the part of the sheet pushed below the screen (--sheet-y) must still be reachable by scrolling */
+  .list { padding-bottom: calc(var(--sheet-y, 0px) + env(safe-area-inset-bottom) + 12px); }
   .fab, .layers { display: grid; place-items: center; }
   .layers { position: fixed; top: var(--st); right: var(--sr); width: 40px; height: 40px; padding: 0; border-radius: 12px;
     background: var(--panel); }

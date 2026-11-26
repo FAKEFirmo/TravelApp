@@ -77,7 +77,9 @@ export function centre(points: { lat: number; lng: number }[], min = 0.35) {
   }
   const lat = Math.atan2(z, Math.hypot(x, y)) * 180 / Math.PI, lng = Math.atan2(y, x) * 180 / Math.PI;
   const span = Math.max(...points.map(p => km({ lat, lng }, p)));
-  return { lat, lng, altitude: Math.min(2.6, Math.max(min, span / 3000)) };
+  // Tall, narrow screens (phones) fit less east–west, and the bottom sheet covers part of the height: zoom out more
+  const narrow = Math.max(1, 0.75 * innerHeight / innerWidth);
+  return { lat, lng, altitude: Math.min(2.6, Math.max(min, span * narrow / 3000)) };
 }
 
 type Mark = { lat: number; lng: number; p?: Place; label?: boolean; a?: Activity; more?: number };
@@ -184,7 +186,9 @@ export function createGlobe(el: HTMLElement, state: () => GlobeState, on: GlobeE
         .arcColor(arcColor);
       paintCountries();
       globe.controls().autoRotate = !current;
-      const pov = current ? centre(current.places) : { altitude: 2.4 };
+      // Overview: face the middle of everywhere you've been (then slowly rotate), not wherever the globe stopped
+      const all = trips.flatMap(t => t.places);
+      const pov = current ? centre(current.places) : all.length ? { ...centre(all), altitude: 2.4 } : { altitude: 2.4 };
       if (!stay && current?.places.length !== 0) globe.pointOfView(pov, 1200);
       scale(stay ? lastAlt : pov.altitude, true);
     },

@@ -68,7 +68,8 @@ function select(t: TripView | null) {
   if (t !== current) detail = false;
   current = t; focused = null; tab = 'timeline';
   if (t) sheet('half');
-  render(); globe.refresh();
+  render(true); globe.refresh();
+  list.querySelector('.trip.on')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); // keep the tapped trip in view
 }
 
 function fly(points: { lat: number; lng: number }[], leg: LegView | null = null, min?: number) {
@@ -266,7 +267,8 @@ let held = false; // swallow the click that ends a pull
   const start = (y: number, target: EventTarget | null) => {
     if (detail || (target as Element).closest?.('input, .swipe-actions')) return;
     y0 = y; pulling = false; held = false;
-    pullEl.style.bottom = `${aside.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom + 14}px`;
+    // + the part of a half-open phone sheet that sits below the screen, so the ring stays visible
+    pullEl.style.bottom = `${aside.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom + 14 + (phone.matches ? detentY(detent) : 0)}px`;
   };
   /** Returns true while the gesture is a pull (caller then stops the native scroll) */
   const move = (y: number) => {
@@ -483,7 +485,7 @@ function addLeg(leg?: Leg, before: Element | null = null) {
   const n = legN++, prev = before ? before.previousElementSibling : legRows.lastElementChild;
   const tpl = document.createElement('template');
   tpl.innerHTML = `<div class="leg-edit">
-    <div class="chips">${Object.entries(MODES).map(([k, m]) => `
+    <div class="chips"><span class="grip" title="Drag to reorder">${icon('GripVertical')}</span>${Object.entries(MODES).map(([k, m]) => `
       <label title="${m.label}"><input type="radio" name="mode${n}" value="${k}" ${k === (leg?.mode ?? 'flight') ? 'checked' : ''}>${icon(m.icon)}</label>`).join('')}
       <button type="button" class="rm" title="Remove leg">${icon('X')}</button></div>
     <div class="row"><input name="from" placeholder="From" required autocomplete="off" data-place>
@@ -535,7 +537,42 @@ function updateLegs() {
   });
 }
 const placeShort = (p: Place) => p.iata ?? p.name;
-legRows.addEventListener('change', e => { if ((e.target as HTMLInputElement).type === 'radio') updateLegs(); });
+/** Put legs in date order; legs on the same day keep the order they're in (stable sort) */
+function sortLegs(moved?: Element) {
+  const rows = [...legRows.children], date = (r: Element) => field(r, 'date').value || '9999';
+  const sorted = [...rows].sort((a, b) => date(a).localeCompare(date(b)));
+  if (sorted.some((r, i) => r !== rows[i])) { legRows.append(...sorted); moved?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+}
+legRows.addEventListener('change', e => {
+  const t = e.target as HTMLInputElement;
+  if (t.name === 'date') sortLegs(t.closest('.leg-edit')!);
+  if (t.type === 'radio' || t.name === 'date') updateLegs();
+});
+
+// Drag a leg by its handle to reorder (pointer events, so it works with touch too). A leg dropped between two
+// dates takes the nearest one, so the date order still holds: dragging is for same-day order or fixing a date.
+legRows.addEventListener('pointerdown', e => {
+  const grip = (e.target as Element).closest('.grip');
+  if (!grip) return;
+  e.preventDefault();
+  const row = grip.closest('.leg-edit')!;
+  grip.setPointerCapture(e.pointerId);
+  row.classList.add('dragging');
+  const move = (ev: PointerEvent) => {
+    const after = [...legRows.children].find(r => r !== row && ev.clientY < r.getBoundingClientRect().top + r.getBoundingClientRect().height / 2);
+    if (after !== row.nextElementSibling) legRows.insertBefore(row, after ?? null);
+  };
+  const up = () => {
+    grip.removeEventListener('pointermove', move as EventListener);
+    row.classList.remove('dragging');
+    const d = field(row, 'date'), prev = row.previousElementSibling, next = row.nextElementSibling;
+    if (prev && d.value < field(prev, 'date').value) d.value = field(prev, 'date').value;
+    if (next && d.value > field(next, 'date').value) d.value = field(next, 'date').value;
+    updateLegs();
+  };
+  grip.addEventListener('pointermove', move as EventListener);
+  grip.addEventListener('lostpointercapture', up, { once: true });
+});
 legRows.addEventListener('input', e => {
   const t = e.target as HTMLInputElement;
   if (t.dataset.place === undefined) return;
@@ -594,12 +631,8 @@ $('#newTrip').onclick = () => openTrip();
 
 tripForm.querySelector('form')!.addEventListener('submit', e => {
   if (e.submitter?.getAttribute('value') !== 'save') return;
+  sortLegs();
   const rows = [...legRows.children];
-  // Legs must be in date order
-  rows.forEach((r, i) => {
-    const d = field(r, 'date').value, prev = i ? field(rows[i - 1], 'date').value : '';
-    field(r, 'date').setCustomValidity(d && prev && d < prev ? 'This leg is earlier than the previous one' : '');
-  });
   legRows.querySelectorAll<HTMLInputElement>('[data-place]').forEach(autoPick);
   if (!validate(e.target as HTMLFormElement)) return e.preventDefault();
   const legs: Leg[] = rows.map(r => {
